@@ -18,4 +18,6 @@ sudo qm destroy <vmid> --purge
 
 ## Networking
 
-Delete the private Kubernetes network (`vmbr8`) via the Proxmox WebUI (to avoid fatal misconfiguration).
+DONT DELETE
+Delete the private Kubernetes network (`vmbr2`) via the Proxmox WebUI (to avoid fatal misconfiguration).
+
