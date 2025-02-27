@@ -1,204 +1,164 @@
+Below is the revised smoke test guide for your Pittsburgh, PA environment:
+
+---
+
 # Smoke Test
 
-In this lab you will complete a series of tasks to ensure your Kubernetes cluster is functioning correctly.
+In this lab you will perform a series of tests to ensure your Kubernetes cluster is functioning correctly in your environment.
 
 ## Data Encryption
 
-In this section you will verify the ability to [encrypt secret data at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/#verifying-that-data-is-encrypted).
+Verify that secret data is encrypted at rest.
 
-Create a generic secret:
+1. **Create a generic secret:**
 
-```bash
-kubectl create secret generic kubernetes-the-hard-way \
-  --from-literal="mykey=mydata"
-```
+   ```bash
+   kubectl create secret generic kubernetes-the-hard-way \
+     --from-literal="mykey=mydata"
+   ```
 
-Print a hexdump of the `kubernetes-the-hard-way` secret stored in etcd:
+2. **Print a hexdump of the secret stored in etcd:**
 
-```bash
-ssh root@controller-0 \
-  sudo ETCDCTL_API=3 etcdctl get \
-  --endpoints=https://127.0.0.1:2379 \
-  --cacert=/etc/etcd/ca.pem \
-  --cert=/etc/etcd/kubernetes.pem \
-  --key=/etc/etcd/kubernetes-key.pem\
-  /registry/secrets/default/kubernetes-the-hard-way | hexdump -C
-```
+   Run this command on one of your controller nodes (for example, on **controller-211**):
 
-> Output:
+   ```bash
+   ssh root@controller-211 \
+     sudo ETCDCTL_API=3 etcdctl get \
+       --endpoints=https://127.0.0.1:2379 \
+       --cacert=/etc/etcd/ca.pem \
+       --cert=/etc/etcd/kubernetes.pem \
+       --key=/etc/etcd/kubernetes-key.pem \
+       /registry/secrets/default/kubernetes-the-hard-way | hexdump -C
+   ```
 
-```bash
-00000000  2f 72 65 67 69 73 74 72  79 2f 73 65 63 72 65 74  |/registry/secret|
-00000010  73 2f 64 65 66 61 75 6c  74 2f 6b 75 62 65 72 6e  |s/default/kubern|
-00000020  65 74 65 73 2d 74 68 65  2d 68 61 72 64 2d 77 61  |etes-the-hard-wa|
-00000030  79 0a 6b 38 73 3a 65 6e  63 3a 61 65 73 63 62 63  |y.k8s:enc:aescbc|
-00000040  3a 76 31 3a 6b 65 79 31  3a 44 ac 6e ac 11 2f 28  |:v1:key1:D.n../(|
-00000050  02 46 3d ad 9d cd 68 be  e4 cc 63 ae 13 e4 99 e8  |.F=...h...c.....|
-00000060  6e 55 a0 fd 9d 33 7a b1  17 6b 20 19 23 dc 3e 67  |nU...3z..k .#.>g|
-00000070  c9 6c 47 fa 78 8b 4d 28  cd d1 71 25 e9 29 ec 88  |.lG.x.M(..q%.)..|
-00000080  7f c9 76 b6 31 63 6e ea  ac c5 e4 2f 32 d7 a6 94  |..v.1cn..../2...|
-00000090  3c 3d 97 29 40 5a ee e1  ef d6 b2 17 01 75 a4 a3  |<=.)@Z.......u..|
-000000a0  e2 c2 70 5b 77 1a 0b ec  71 c3 87 7a 1f 68 73 03  |..p[w...q..z.hs.|
-000000b0  67 70 5e ba 5e 65 ff 6f  0c 40 5a f9 2a bd d6 0e  |gp^.^e.o.@Z.*...|
-000000c0  44 8d 62 21 1a 30 4f 43  b8 03 69 52 c0 b7 2e 16  |D.b!.0OC..iR....|
-000000d0  14 a5 91 21 29 fa 6e 03  47 e2 06 25 45 7c 4f 8f  |...!).n.G..%E|O.|
-000000e0  6e bb 9d 3b e9 e5 2d 9e  3e 0a                    |n..;..-.>.|
-```
-
-The etcd key should be prefixed with `k8s:enc:aescbc:v1:key1`, which indicates the `aescbc` provider was used to encrypt the data with the `key1` encryption key.
+   The output should begin with a prefix like `k8s:enc:aescbc:v1:key1`, indicating that the data was encrypted using the `aescbc` provider with the key named `key1`.
 
 ## Deployments
 
-In this section you will verify the ability to create and manage [Deployments](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/).
+Verify that you can create and manage deployments.
 
-Create a deployment for the [nginx](https://nginx.org/en/) web server:
+1. **Create an nginx deployment:**
 
-```bash
-kubectl create deployment nginx --image=nginx
-```
+   ```bash
+   kubectl create deployment nginx --image=nginx
+   ```
 
-List the pod created by the `nginx` deployment:
+2. **List the pods created by the nginx deployment:**
 
-```bash
-kubectl get pods -l app=nginx
-```
+   ```bash
+   kubectl get pods -l app=nginx
+   ```
 
-> Output (you may need to wait a few seconds to see the pod "READY"):
+   You should see output similar to:
 
-```bash
-NAME                     READY   STATUS    RESTARTS   AGE
-nginx-554b9c67f9-vt5rn   1/1     Running   0          10s
-```
+   ```plaintext
+   NAME                     READY   STATUS    RESTARTS   AGE
+   nginx-554b9c67f9-vt5rn   1/1     Running   0          10s
+   ```
 
 ### Port Forwarding
 
-In this section you will verify the ability to access applications remotely using [port forwarding](https://kubernetes.io/docs/tasks/access-application-cluster/port-forward-access-application-cluster/).
+1. **Retrieve the pod name:**
 
-Retrieve the full name of the `nginx` pod:
+   ```bash
+   POD_NAME=$(kubectl get pods -l app=nginx -o jsonpath="{.items[0].metadata.name}")
+   ```
 
-```bash
-POD_NAME=$(kubectl get pods -l app=nginx -o jsonpath="{.items[0].metadata.name}")
-```
+2. **Forward port 8080 on your local machine to port 80 on the nginx pod:**
 
-Forward port `8080` on your local machine to port `80` of the `nginx` pod:
+   ```bash
+   kubectl port-forward $POD_NAME 8080:80
+   ```
 
-```bash
-kubectl port-forward $POD_NAME 8080:80
-```
+   You should see output like:
 
-> Output:
+   ```plaintext
+   Forwarding from 127.0.0.1:8080 -> 80
+   Forwarding from [::1]:8080 -> 80
+   ```
 
-```bash
-Forwarding from 127.0.0.1:8080 -> 80
-Forwarding from [::1]:8080 -> 80
-```
+3. **In a new terminal, verify the forwarding by making an HTTP HEAD request:**
 
-In a new terminal make an HTTP request using the forwarding address:
+   ```bash
+   curl --head http://127.0.0.1:8080
+   ```
 
-```bash
-curl --head http://127.0.0.1:8080
-```
+   Expected output includes `HTTP/1.1 200 OK`.
 
-> Output:
-
-```bash
-HTTP/1.1 200 OK
-Server: nginx/1.19.0
-Date: Wed, 24 Jun 2020 12:55:15 GMT
-Content-Type: text/html
-Content-Length: 612
-Last-Modified: Tue, 26 May 2020 15:00:20 GMT
-Connection: keep-alive
-ETag: "5ecd2f04-264"
-Accept-Ranges: bytes
-```
-
-Switch back to the previous terminal and stop the port forwarding to the `nginx` pod:
-
-```bash
-Forwarding from 127.0.0.1:8080 -> 80
-Forwarding from [::1]:8080 -> 80
-Handling connection for 8080
-^C
-```
+   When finished, press `Ctrl+C` to stop port forwarding.
 
 ### Logs
 
-In this section you will verify the ability to [retrieve container logs](https://kubernetes.io/docs/concepts/cluster-administration/logging/).
-
-Print the `nginx` pod logs:
+Check the logs of the nginx pod:
 
 ```bash
 kubectl logs $POD_NAME
 ```
 
-> Output:
+You should see log entries similar to:
 
-```bash
+```plaintext
 127.0.0.1 - - [24/Jun/2020:12:55:15 +0000] "HEAD / HTTP/1.1" 200 0 "-" "curl/7.64.0" "-"
 ```
 
 ### Exec
 
-In this section you will verify the ability to [execute commands in a container](https://kubernetes.io/docs/tasks/debug-application-cluster/get-shell-running-container/#running-individual-commands-in-a-container).
-
-Print the nginx version by executing the `nginx -v` command in the `nginx` container:
+Verify command execution inside the container by printing the nginx version:
 
 ```bash
 kubectl exec -ti $POD_NAME -- nginx -v
 ```
 
-> Output:
+Expected output:
 
-```bash
+```plaintext
 nginx version: nginx/1.19.0
 ```
 
 ## Services
 
-In this section you will verify the ability to expose applications using a [Service](https://kubernetes.io/docs/concepts/services-networking/service/).
+Expose the nginx deployment via a NodePort service.
 
-Expose the `nginx` deployment using a [NodePort](https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport) service:
+1. **Expose the deployment:**
 
-```bash
-kubectl expose deployment nginx --port 80 --type NodePort
-```
+   ```bash
+   kubectl expose deployment nginx --port 80 --type NodePort
+   ```
 
-> The LoadBalancer service type can not be used because your cluster is not configured with. It is out of scope for this tutorial.
+2. **Retrieve the assigned node port:**
 
-Retrieve the node port assigned to the `nginx` service:
+   ```bash
+   NODE_PORT=$(kubectl get svc nginx --output=jsonpath='{range .spec.ports[0]}{.nodePort}')
+   ```
 
-```bash
-NODE_PORT=$(kubectl get svc nginx \
-  --output=jsonpath='{range .spec.ports[0]}{.nodePort}')
-```
+3. **Define the IP of a worker node for testing.** For example, using **worker-214**:
 
-Define the Kubernetes network IP address of a worker instance (replace MY_WORKER_IP with the private IP defined on a worker):
+   ```bash
+   NODE_IP=192.168.1.214
+   ```
 
-```bash
-NODE_IP=MY_WORKER_IP
-```
+4. **Make an HTTP HEAD request to the nginx service via the worker node:**
 
-> Example for worker-0: 192.168.8.20
+   ```bash
+   curl -I http://${NODE_IP}:${NODE_PORT}
+   ```
 
-Make an HTTP request using the external IP address and the `nginx` node port:
+   Expected output should include:
 
-```bash
-curl -I http://${NODE_IP}:${NODE_PORT}
-```
-
-> Output:
-
-```bash
-HTTP/1.1 200 OK
-Server: nginx/1.19.0
-Date: Wed, 24 Jun 2020 12:57:37 GMT
-Content-Type: text/html
-Content-Length: 612
-Last-Modified: Tue, 26 May 2020 15:00:20 GMT
-Connection: keep-alive
-ETag: "5ecd2f04-264"
-Accept-Ranges: bytes
-```
+   ```plaintext
+   HTTP/1.1 200 OK
+   Server: nginx/1.19.0
+   ...
+   ```
 
 Next: [Cleaning Up](14-cleanup.md)
+
+---
+
+This guide uses your environment details:
+- **Gateway VM (gateway-245)** has public IP **10.10.12.245**.
+- Controller nodes: **controller-211**, **controller-212**, **controller-213**.
+- Worker nodes: **worker-214**, **worker-241**, **worker-242**, **worker-243**, **worker-244**.
+- Region: Pittsburgh, PA.
+
+You can now proceed with the smoke test to verify that your cluster is functioning correctly.
