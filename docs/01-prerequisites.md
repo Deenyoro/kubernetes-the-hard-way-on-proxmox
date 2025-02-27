@@ -93,29 +93,28 @@ Perform the following steps on the gateway VM:
 
 2. **Configure the network interfaces**
 
-   Edit `/etc/network/interfaces` (assuming your public interface is `ens18` and your private interface is `ens19`). Replace the placeholders with your actual values:
+   Edit `/etc/netplan/01-static.yaml` (assuming your public interface is `ens18` and your private interface is `ens19`). Replace the placeholders with your actual values:
 
    ```bash
-   source /etc/network/interfaces.d/*
+root@debian245:~/.ssh# cat /etc/netplan/01-static.yaml
 
-   # The loopback network interface
-   auto lo
-   iface lo inet loopback
-
-   # The public network interface
-   auto ens18
-   allow-hotplug ens18
-   iface ens18 inet static
-           address 10.10.12.245/24
-           gateway 10.10.12.1
-           dns-nameservers 9.9.9.9
-
-   # The private network interface
-   auto ens19
-   allow-hotplug ens19
-   iface ens19 inet static
-           address 192.168.1.245/24
-           dns-nameservers 9.9.9.9
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens18:
+      addresses:
+        - 10.10.12.245/24
+      routes:
+        - to: default
+          via: 10.10.12.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 8.8.4.4
+    ens19:
+      addresses:
+        - 192.168.1.245/24
    ```
 
    > If you wish, you can also configure IPv6 and/or a different DNS resolver.
@@ -247,7 +246,7 @@ For each node, perform the following steps:
          gateway4: 192.168.1.245
          nameservers:
            addresses:
-           - 9.9.9.9
+           - 8.8.8.8
      version: 2
    ```
 
