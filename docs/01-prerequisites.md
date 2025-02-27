@@ -33,6 +33,8 @@ List of the VMs used in this tutorial:
 | worker-244    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.244/24                                 | Ubuntu |
 | gateway-245   | Reverse Proxy, Client Tools, Gateway    | 1    | 1GB  | 20GB           | Private: 192.168.1.245/24 <br> Public: 10.10.12.245/24 | Debian |
 
+```
+
 On the Proxmox hypervisor, you might choose to add a `k8s-` prefix to the VM names if desired.
 
 ![proxmox vm list](images/proxmox-vm-list.PNG)
