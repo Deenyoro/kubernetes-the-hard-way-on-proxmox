@@ -1,31 +1,42 @@
+Below is the revised guide for bootstrapping the etcd cluster in your environment. In your setup, the controller nodes are named **controller-211**, **controller-212**, and **controller-213**, with the following internal IP addresses:
+
+- **controller-211**: 192.168.1.211  
+- **controller-212**: 192.168.1.212  
+- **controller-213**: 192.168.1.213
+
+Run these commands on each controller node (using, for example, `ssh root@controller-211`).
+
+---
+
+
 # Bootstrapping the etcd Cluster
 
-Kubernetes components are stateless and store cluster state in [etcd](https://github.com/etcd-io/etcd). In this lab you will bootstrap a three node etcd cluster and configure it for high availability and secure remote access.
+Kubernetes components are stateless and store cluster state in [etcd](https://github.com/etcd-io/etcd). In this lab you will bootstrap a three-node etcd cluster and configure it for high availability and secure remote access.
 
 ## Prerequisites
 
-The commands in this lab must be run on each controller instance: `controller-0`, `controller-1`, and `controller-2`. Login to each controller instance using the `ssh` command. Example for `controller-0`:
+The commands in this lab must be run on each controller instance: **controller-211**, **controller-212**, and **controller-213**. Log in to each controller instance using `ssh`. For example, for controller-211:
 
 ```bash
-ssh root@controller-0
+ssh root@controller-211
 ```
 
 ### Running commands in parallel with tmux
 
-[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands on multiple compute instances at the same time. See the [Running commands in parallel with tmux](01-prerequisites.md#running-commands-in-parallel-with-tmux) section in the Prerequisites lab.
+[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands on multiple instances simultaneously. See the [Running commands in parallel with tmux](01-prerequisites.md#running-commands-in-parallel-with-tmux) section in the Prerequisites lab.
 
 ## Bootstrapping an etcd Cluster Member
 
 ### Download and Install the etcd Binaries
 
-Download the official etcd release binaries from the [etcd](https://github.com/etcd-io/etcd) GitHub project:
+Download the official etcd release binaries from the [etcd GitHub project](https://github.com/etcd-io/etcd):
 
 ```bash
 wget -q --show-progress --https-only --timestamping \
   "https://github.com/etcd-io/etcd/releases/download/v3.5.12/etcd-v3.5.12-linux-amd64.tar.gz"
 ```
 
-Extract and install the `etcd` server and the `etcdctl` command line utility:
+Extract and install the `etcd` server and the `etcdctl` utility:
 
 ```bash
 tar -xvf etcd-v3.5.12-linux-amd64.tar.gz
@@ -34,26 +45,28 @@ sudo mv etcd-v3.5.12-linux-amd64/etcd* /usr/local/bin/
 
 ### Configure the etcd Server
 
+Create necessary directories and copy the required certificates (which you generated earlier):
+
 ```bash
 sudo mkdir -p /etc/etcd /var/lib/etcd
 sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
 ```
 
-The instance internal IP address will be used to serve client requests and communicate with etcd cluster peers. Define the INTERNAL_IP (replace MY_NODE_INTERNAL_IP by the value):
+Each etcd member will use its internal IP address to serve client requests and communicate with cluster peers. On each controller node, define the INTERNAL_IP variable using the node’s IP address. For example, on **controller-211**:
 
 ```bash
-INTERNAL_IP=MY_NODE_INTERNAL_IP
+INTERNAL_IP=192.168.1.211
 ```
 
-> Example for controller-0 : 192.168.8.10
+> **Note:** On controller-212 and controller-213, set INTERNAL_IP to 192.168.1.212 and 192.168.1.213 respectively.
 
-Each etcd member must have a unique name within an etcd cluster. Set the etcd name to match the hostname of the current compute instance:
+Each etcd member must have a unique name. Set the etcd name to match the hostname:
 
 ```bash
 ETCD_NAME=$(hostname -s)
 ```
 
-Create the `etcd.service` systemd unit file:
+Create the systemd unit file for etcd:
 
 ```bash
 cat <<EOF | sudo tee /etc/systemd/system/etcd.service
@@ -78,7 +91,7 @@ ExecStart=/usr/local/bin/etcd \\
   --listen-client-urls https://${INTERNAL_IP}:2379,https://127.0.0.1:2379 \\
   --advertise-client-urls https://${INTERNAL_IP}:2379 \\
   --initial-cluster-token etcd-cluster-0 \\
-  --initial-cluster controller-0=https://192.168.8.10:2380,controller-1=https://192.168.8.11:2380,controller-2=https://192.168.8.12:2380 \\
+  --initial-cluster controller-211=https://192.168.1.211:2380,controller-212=https://192.168.1.212:2380,controller-213=https://192.168.1.213:2380 \\
   --initial-cluster-state new \\
   --data-dir=/var/lib/etcd
 Restart=on-failure
@@ -91,17 +104,19 @@ EOF
 
 ### Start the etcd Server
 
+Reload the systemd configuration, enable, and start etcd:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable etcd
 sudo systemctl start etcd
 ```
 
-> Remember to run the above commands on each controller node: `controller-0`, `controller-1`, and `controller-2`.
+> **Reminder:** Repeat these steps on **controller-211**, **controller-212**, and **controller-213**.
 
 ## Verification
 
-List the etcd cluster members:
+List the etcd cluster members by running the following command on any controller:
 
 ```bash
 sudo ETCDCTL_API=3 etcdctl member list \
@@ -111,12 +126,71 @@ sudo ETCDCTL_API=3 etcdctl member list \
   --key=/etc/etcd/kubernetes-key.pem
 ```
 
-> Output:
+A successful output should list your three members similar to:
 
 ```bash
-3a57933972cb5131, started, controller-2, https://192.168.8.12:2380, https://192.168.8.12:2379
-f98dc20bce6225a0, started, controller-0, https://192.168.8.10:2380, https://192.168.8.10:2379
-ffed16798470cab5, started, controller-1, https://192.168.8.11:2380, https://192.168.8.11:2379
+<member-id>, started, controller-211, https://192.168.1.211:2380, https://192.168.1.211:2379
+<member-id>, started, controller-212, https://192.168.1.212:2380, https://192.168.1.212:2379
+<member-id>, started, controller-213, https://192.168.1.213:2380, https://192.168.1.213:2379
 ```
 
 Next: [Bootstrapping the Kubernetes Control Plane](08-bootstrapping-kubernetes-controllers.md)
+```
+
+---
+
+### Additional Note: Your Netplan Configuration on gateway-245
+
+For reference, here is your netplan configuration on **gateway-245** (your gateway VM):
+
+```yaml
+root@debian245:~/.ssh# cat /etc/netplan/01-static.yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens18:
+      addresses:
+        - 10.10.12.245/24
+      routes:
+        - to: default
+          via: 10.10.12.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 8.8.4.4
+    ens19:
+      addresses:
+        - 192.168.1.245/24
+```
+
+And your `/etc/hosts` on **gateway-245**:
+
+```plaintext
+127.0.0.1       localhost
+10.10.12.245    gateway-245.external gateway-245
+
+# The following lines are for IPv6:
+::1             localhost ip6-localhost ip6-loopback
+ff02::1         ip6-allnodes
+ff02::2         ip6-allrouters
+
+192.168.1.211   controller-211
+192.168.1.212   controller-212
+192.168.1.213   controller-213
+
+192.168.1.214   worker-214
+192.168.1.241   worker-241
+192.168.1.242   worker-242
+192.168.1.243   worker-243
+192.168.1.244   worker-244
+```
+
+This confirms that your internal network for Kubernetes nodes is **192.168.1.0/24**.
+
+---
+
+This guide has been updated for your environment:
+- **Controller Nodes**: controller-211 (192.168.1.211), controller-212 (192.168.1.212), controller-213 (192.168.1.213)
+- The etcd cluster is configured to use these IP addresses on port 2380 for peer communication and port 2379 for client access.
+- The instructions should be executed on each controller node accordingly.
