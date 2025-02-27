@@ -1,18 +1,24 @@
+Below is the revised guide for configuring **kubectl** for remote access in your Pittsburgh, PA environment. In this setup, you will generate a kubeconfig file for the **admin** user. The external load balancer is provided by your **gateway-245** VM, which has a public IP of **10.10.12.245**.
+
+Run these commands from the directory where you generated your admin client certificates.
+
+---
+
 # Configuring kubectl for Remote Access
 
 In this lab you will generate a kubeconfig file for the `kubectl` command line utility based on the `admin` user credentials.
 
-> Run the commands in this lab from the same directory used to generate the admin client certificates.
-
 ## The Admin Kubernetes Configuration File
 
-Each kubeconfig requires a Kubernetes API Server to connect to. To support high availability the IP address assigned to the external load balancer fronting the Kubernetes API Servers will be used.
-
-Generate a kubeconfig file suitable for authenticating as the `admin` user (replace MY_PUBLIC_IP_ADDRESS with your public IP address on the `gateway-01` VM):
+Each kubeconfig requires a Kubernetes API Server endpoint. In our environment the external load balancer on **gateway-245** provides this endpoint. Set the public address as follows:
 
 ```bash
-KUBERNETES_PUBLIC_ADDRESS=MY_PUBLIC_IP_ADDRESS
+KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
+```
 
+Generate a kubeconfig file for the `admin` user:
+
+```bash
 kubectl config set-cluster kubernetes-the-hard-way \
   --certificate-authority=ca.pem \
   --embed-certs=true \
@@ -31,79 +37,38 @@ kubectl config use-context kubernetes-the-hard-way
 
 ## Verification
 
-Check the health of the remote Kubernetes cluster:
+To verify remote access to your Kubernetes cluster, check the component statuses:
 
-```bash
-kubectl get componentstatuses
-```
-
-> Output:
-
-```bash
-NAME                 STATUS    MESSAGE             ERROR
-controller-manager   Healthy   ok
-scheduler            Healthy   ok
-etcd-1               Healthy   {"health":"true"}
-etcd-2               Healthy   {"health":"true"}
-etcd-0               Healthy   {"health":"true"}
-```
-
-However component statuses are deprecated in Kubernetes 1.19 and later, so the recommended way to check cluster health is:
 ```bash
 kubectl get --raw='/readyz?verbose'
 ```
 
-> Output:
+Expected output should confirm that all components (etcd, controller-manager, scheduler, etc.) are healthy.
 
-```bash
-[+]ping ok
-[+]log ok
-[+]etcd ok
-[+]etcd-readiness ok
-[+]informer-sync ok
-[+]poststarthook/start-kube-apiserver-admission-initializer ok
-[+]poststarthook/generic-apiserver-start-informers ok
-[+]poststarthook/priority-and-fairness-config-consumer ok
-[+]poststarthook/priority-and-fairness-filter ok
-[+]poststarthook/storage-object-count-tracker-hook ok
-[+]poststarthook/start-apiextensions-informers ok
-[+]poststarthook/start-apiextensions-controllers ok
-[+]poststarthook/crd-informer-synced ok
-[+]poststarthook/start-service-ip-repair-controllers ok
-[+]poststarthook/rbac/bootstrap-roles ok
-[+]poststarthook/scheduling/bootstrap-system-priority-classes ok
-[+]poststarthook/priority-and-fairness-config-producer ok
-[+]poststarthook/start-system-namespaces-controller ok
-[+]poststarthook/bootstrap-controller ok
-[+]poststarthook/start-cluster-authentication-info-controller ok
-[+]poststarthook/start-kube-apiserver-identity-lease-controller ok
-[+]poststarthook/start-kube-apiserver-identity-lease-garbage-collector ok
-[+]poststarthook/start-legacy-token-tracking-controller ok
-[+]poststarthook/start-kube-aggregator-informers ok
-[+]poststarthook/apiservice-registration-controller ok
-[+]poststarthook/apiservice-status-available-controller ok
-[+]poststarthook/kube-apiserver-autoregistration ok
-[+]autoregister-completion ok
-[+]poststarthook/apiservice-openapi-controller ok
-[+]poststarthook/apiservice-openapiv3-controller ok
-[+]poststarthook/apiservice-discovery-controller ok
-[+]shutdown ok
-readyz check passed
-```
-
-List the nodes in the remote Kubernetes cluster:
+You can also list the nodes registered in your cluster:
 
 ```bash
 kubectl get nodes
 ```
 
-> Output:
+Expected output might look similar to:
 
 ```bash
-NAME       STATUS   ROLES    AGE   VERSION
-worker-0   Ready    <none>   90s   v1.29.1
-worker-1   Ready    <none>   91s   v1.29.1
-worker-2   Ready    <none>   90s   v1.29.1
+NAME           STATUS   ROLES    AGE   VERSION
+worker-214     Ready    <none>   5m    v1.29.1
+worker-241     Ready    <none>   5m    v1.29.1
+worker-242     Ready    <none>   5m    v1.29.1
+worker-243     Ready    <none>   5m    v1.29.1
+worker-244     Ready    <none>   5m    v1.29.1
 ```
 
 Next: [Provisioning Pod Network Routes](11-pod-network-routes.md)
+
+
+This guide uses your environment details:  
+- **Gateway VM (gateway-245)**: Public IP **10.10.12.245**  
+- Controllers: **controller-211**, **controller-212**, **controller-213**  
+- Workers: **worker-214**, **worker-241**, **worker-242**, **worker-243**, **worker-244**  
+- Region: Pittsburgh, PA
+
+You can now use **kubectl** with the generated configuration to manage your remote cluster.
