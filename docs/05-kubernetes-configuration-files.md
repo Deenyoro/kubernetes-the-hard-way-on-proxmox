@@ -21,7 +21,7 @@ You will generate kubeconfig files for the kubelet, kube-proxy, kube-controller-
 Each kubeconfig requires an API Server endpoint. In our environment we use the external public IP of the gateway VM. Define the public address:
 
 ```bash
-KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
+EXPORT KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
 ```
 
 ### The kubelet Kubernetes Configuration File
