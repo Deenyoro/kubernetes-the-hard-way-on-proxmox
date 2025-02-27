@@ -1,31 +1,35 @@
+Below is the revised guide for generating Kubernetes configuration files for authentication, adapted to your environment. In your setup:
+
+- Your gateway VM (**gateway-245**) has a public IP of **10.10.12.245** (acting as your external load balancer) and a private IP of **192.168.1.245**.
+- Your controllers are **controller-211**, **controller-212**, and **controller-213**.
+- Your worker nodes are **worker-214**, **worker-241**, **worker-242**, **worker-243**, and **worker-244**.
+- In this guide, we assume that the Kubernetes API Server will be reached externally via **10.10.12.245:6443** (for workers) while on controllers local requests use **127.0.0.1:6443**.
+- Region details are updated to US, Pittsburgh, PA.
+
+---
+
 # Generating Kubernetes Configuration Files for Authentication
 
-In this lab you will generate [Kubernetes configuration files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/), also known as kubeconfigs, which enable Kubernetes clients to locate and authenticate to the Kubernetes API Servers.
+In this lab you will generate [Kubernetes configuration files](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/) (kubeconfigs) that enable Kubernetes clients to locate and authenticate to the Kubernetes API Server.
 
 ## Client Authentication Configs
 
-In this section you will generate kubeconfig files for the `controller manager`, `kubelet`, `kube-proxy`, and `scheduler` clients and the `admin` user.
+You will generate kubeconfig files for the kubelet, kube-proxy, kube-controller-manager, kube-scheduler, and the admin user.
 
 ### Kubernetes Public IP Address
 
-Each kubeconfig requires a Kubernetes API Server to connect to. To support high availability the IP address assigned to the external load balancer fronting the Kubernetes API Servers will be used.
-
-Define the static public IP address (you need to replace YOUR_EXTERNAL_IP by your external IP address):
+Each kubeconfig requires an API Server endpoint. In our environment we use the external public IP of the gateway VM. Define the public address:
 
 ```bash
-KUBERNETES_PUBLIC_ADDRESS=YOUR_EXTERNAL_IP
+KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
 ```
 
 ### The kubelet Kubernetes Configuration File
 
-When generating kubeconfig files for Kubelets the client certificate matching the Kubelet's node name must be used. This will ensure Kubelets are properly authorized by the Kubernetes [Node Authorizer](https://kubernetes.io/docs/admin/authorization/node/).
-
-> The following commands must be run in the same directory used to generate the SSL certificates during the [Generating TLS Certificates](04-certificate-authority.md) lab.
-
-Generate a kubeconfig file for each worker node:
+For kubelet configurations, the client certificate must match the kubelet's node name. Generate a kubeconfig file for each worker node:
 
 ```bash
-for instance in worker-0 worker-1 worker-2; do
+for instance in worker-214 worker-241 worker-242 worker-243 worker-244; do
   kubectl config set-cluster kubernetes-the-hard-way \
     --certificate-authority=ca.pem \
     --embed-certs=true \
@@ -47,17 +51,16 @@ for instance in worker-0 worker-1 worker-2; do
 done
 ```
 
-Results:
-
-```bash
-worker-0.kubeconfig
-worker-1.kubeconfig
-worker-2.kubeconfig
-```
+This produces the following kubeconfig files:
+- `worker-214.kubeconfig`
+- `worker-241.kubeconfig`
+- `worker-242.kubeconfig`
+- `worker-243.kubeconfig`
+- `worker-244.kubeconfig`
 
 ### The kube-proxy Kubernetes Configuration File
 
-Generate a kubeconfig file for the `kube-proxy` service:
+Generate a kubeconfig file for the kube-proxy service:
 
 ```bash
 kubectl config set-cluster kubernetes-the-hard-way \
@@ -80,15 +83,12 @@ kubectl config set-context default \
 kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
 ```
 
-Results:
-
-```bash
-kube-proxy.kubeconfig
-```
+This produces:
+- `kube-proxy.kubeconfig`
 
 ### The kube-controller-manager Kubernetes Configuration File
 
-Generate a kubeconfig file for the `kube-controller-manager` service:
+Generate a kubeconfig file for the kube-controller-manager service. For controllers, use the local loopback interface:
 
 ```bash
 kubectl config set-cluster kubernetes-the-hard-way \
@@ -111,15 +111,12 @@ kubectl config set-context default \
 kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig
 ```
 
-Results:
-
-```bash
-kube-controller-manager.kubeconfig
-```
+This produces:
+- `kube-controller-manager.kubeconfig`
 
 ### The kube-scheduler Kubernetes Configuration File
 
-Generate a kubeconfig file for the `kube-scheduler` service:
+Generate a kubeconfig file for the kube-scheduler service:
 
 ```bash
 kubectl config set-cluster kubernetes-the-hard-way \
@@ -142,15 +139,12 @@ kubectl config set-context default \
 kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig
 ```
 
-Results:
-
-```bash
-kube-scheduler.kubeconfig
-```
+This produces:
+- `kube-scheduler.kubeconfig`
 
 ### The admin Kubernetes Configuration File
 
-Generate a kubeconfig file for the `admin` user:
+Generate a kubeconfig file for the admin user:
 
 ```bash
 kubectl config set-cluster kubernetes-the-hard-way \
@@ -173,28 +167,34 @@ kubectl config set-context default \
 kubectl config use-context default --kubeconfig=admin.kubeconfig
 ```
 
-Results:
-
-```bash
-admin.kubeconfig
-```
+This produces:
+- `admin.kubeconfig`
 
 ## Distribute the Kubernetes Configuration Files
 
-Copy the appropriate `kubelet` and `kube-proxy` kubeconfig files to each worker instance:
+Copy the appropriate kubelet and kube-proxy kubeconfig files to each worker node:
 
 ```bash
-for instance in worker-0 worker-1 worker-2; do
+for instance in worker-214 worker-241 worker-242 worker-243 worker-244; do
   scp ${instance}.kubeconfig kube-proxy.kubeconfig root@${instance}:~/
 done
 ```
 
-Copy the appropriate `kube-controller-manager` and `kube-scheduler` kubeconfig files to each controller instance:
+Copy the kube-controller-manager, kube-scheduler, and admin kubeconfig files to each controller node:
 
 ```bash
-for instance in controller-0 controller-1 controller-2; do
+for instance in controller-211 controller-212 controller-213; do
   scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig root@${instance}:~/
 done
 ```
 
 Next: [Generating the Data Encryption Config and Key](06-data-encryption-keys.md)
+
+---
+
+This guide has been updated to reflect your environment:
+- **gateway-245**: Public IP 10.10.12.245
+- **Controllers**: controller-211, controller-212, controller-213
+- **Workers**: worker-214, worker-241, worker-242, worker-243, worker-244
+- API Server endpoints for worker clients use the external IP, while controller components use localhost.
+- Region details are now US, Pittsburgh, PA.
