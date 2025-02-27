@@ -260,7 +260,6 @@ ok
 (Instructions to provision an Nginx load balancer to front the API Servers on the gateway VM follow here.)
 
 Next: [Bootstrapping the Kubernetes Worker Nodes](09-bootstrapping-kubernetes-workers.md)
-```
 
 ---
 
