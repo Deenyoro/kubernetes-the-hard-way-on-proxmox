@@ -95,9 +95,11 @@ Perform the following steps on the gateway VM:
 
 2. **Configure the network interfaces**
 
-   Edit `/etc/netplan/01-static.yaml` (assuming your public interface is `ens18` and your private interface is `ens19`). Replace the placeholders with your actual values:
+   Edit /etc/netplan/01-static.yaml (assuming your public interface is ens18 and your private interface is ens19). Replace the placeholders with your actual values:
 
-   ```bash
+
+```bash
+   
 root@debian245:~/.ssh# cat /etc/netplan/01-static.yaml
 
 network:
