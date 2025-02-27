@@ -1,205 +1,145 @@
+---
+
 # Provisioning Compute Resources
 
-Kubernetes requires a set of machines to host the Kubernetes control plane and the worker nodes where containers are ultimately run. In this lab you will check and eventually adjust the configuration defined in the `01-prerequisites` part.
+Kubernetes requires a set of machines to host both the control plane and the worker nodes. In this lab you’ll review (and adjust if necessary) the configurations you defined in the prerequisites.
 
 ## Networking
 
-The Kubernetes [networking model](https://kubernetes.io/docs/concepts/cluster-administration/networking/#kubernetes-model) assumes a flat network in which containers and nodes can communicate with each other. In cases where this is not desired [network policies](https://kubernetes.io/docs/concepts/services-networking/network-policies/) can limit how groups of containers are allowed to communicate with each other and external network endpoints.
-
-> Setting up network policies is out of scope for this tutorial.
+The Kubernetes [networking model](https://kubernetes.io/docs/concepts/cluster-administration/networking/#kubernetes-model) assumes a flat network in which all containers and nodes can communicate with each other. (Network policies can later restrict this communication if needed.)
 
 ### Virtual Private Cloud Network
 
-We provisioned this network in the `01-prerequisites` part: `192.168.8.0/24` which can host up to `253` Kubernetes nodes (`254 - 1` for gateway). This is our "VPC-like" network with private IP addresses.
+In the prerequisites, we set up a private network—**192.168.1.0/24**—to host our Kubernetes nodes. This “VPC-like” network supports up to 253 nodes (with one IP reserved for the gateway).
 
 ### Pods Network Ranges
 
-Containers/Pods running on each workers need networks to communicate with other ressources. We will use the `10.200.0.0/16` private range to create Pods subnetworks:
+Containers (Pods) on each worker need their own subnetworks. We will use the **10.200.0.0/16** private range to create Pod subnets. For example, if you have five workers you might allocate:
 
-* 10.200.0.0/24 : worker-0
-* 10.200.1.0/24 : worker-1
-* 10.200.2.0/24 : worker-2
+- worker-214: 10.200.0.0/24  
+- worker-241: 10.200.1.0/24  
+- worker-242: 10.200.2.0/24  
+- worker-243: 10.200.3.0/24  
+- worker-244: 10.200.4.0/24  
+
+Adjust the assignments according to your actual node count.
 
 ### Firewall Rules
 
-All the flows are allowed inside the Kubernetes private network (`vmbr8`). In the `01-prerequisites` part, the `gateway-01` VM firewall has been configured to use NAT and allow the following INPUT protocols (from external): `icmp`, `tcp/22`, `tcp/80`, `tcp/443` and `tcp/6443`.
+Within the Kubernetes private network (linked via your Proxmox bridge, e.g. `vmbr8`), all traffic is permitted. On the **gateway-245** VM, the firewall is configured to NAT traffic and allow the following inbound protocols from external networks:  
+- ICMP  
+- TCP/22 (SSH)  
+- TCP/80 (HTTP)  
+- TCP/443 (HTTPS)  
+- TCP/6443 (Kubernetes API)
 
-Check the rules on the `gateway-01` VM (example if `ens18` is the public network interface):
+To view the firewall rules on **gateway-245** (assuming `ens18` is the public interface):
 
 ```bash
-root@gateway-01:~# iptables -L INPUT -v -n
-Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+sudo iptables -L INPUT -v -n
+```
+
+You should see rules similar to:
+
+```bash
+Chain INPUT (policy ACCEPT)
  pkts bytes target     prot opt in     out     source               destination
- 2062  905K ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0
- 150K   21M ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:22
- 7259  598K ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:80
-  772 32380 ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:443
-  772 32380 ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:6443
-23318 1673K ACCEPT     icmp --  ens18  *       0.0.0.0/0            0.0.0.0/0
-  36M 6163M ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
- 113K 5899K DROP       all  --  ens18  *       0.0.0.0/0            0.0.0.0/0
+  ...  ...  ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0
+  ...  ...  ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:22
+  ...  ...  ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:80
+  ...  ...  ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:443
+  ...  ...  ACCEPT     tcp  --  ens18  *       0.0.0.0/0            0.0.0.0/0            tcp dpt:6443
+  ...  ...  ACCEPT     icmp --  ens18  *       0.0.0.0/0            0.0.0.0/0
+  ...  ...  ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+  ...  ...  DROP       all  --  ens18  *       0.0.0.0/0            0.0.0.0/0
 ```
 
 ### Kubernetes Public IP Address
 
-A public IP address need to be defined on the public network interface of the `gateway-01` VM (done in the `01-prerequisites` part).
+A public IP must be assigned to the public interface of the **gateway-245** VM. In our setup, this is **10.10.12.245/24**, with the upstream default gateway set as **10.10.12.1**.
 
 ### Verification
 
-On each VM, check the active IP address(es) with the following command:
+On each VM, check the active IP addresses:
 
 ```bash
 ip a
 ```
 
-> Output (example with controller-0):
+> Example output (from, say, controller-211):
+>
+> ```bash
+> 2: ens18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ...
+>     inet 192.168.1.211/24 brd 192.168.1.255 scope global ens18
+>     inet6 fe80::.../64 scope link
+> ```
+
+From the **gateway-245** VM, verify connectivity by pinging each node. For example:
 
 ```bash
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host
-       valid_lft forever preferred_lft forever
-2: ens18: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
-    link/ether e6:27:6e:8c:d6:7b brd ff:ff:ff:ff:ff:ff
-    inet 192.168.8.10/24 brd 192.168.8.255 scope global ens18
-       valid_lft forever preferred_lft forever
-    inet6 fe80::e427:6eff:fe8c:d67b/64 scope link
-       valid_lft forever preferred_lft forever
+ping -c1 controller-211
+ping -c1 worker-214
 ```
 
-From the `gateway-01` VM, try to ping all controllers and workers VM:
-
-```bash
-for i in 0 1 2; do ping -c1 controller-$i; ping -c1 worker-$i; done
-```
-
-> Output:
-
-```bash
-PING controller-0 (192.168.8.10) 56(84) bytes of data.
-64 bytes from controller-0 (192.168.8.10): icmp_seq=1 ttl=64 time=0.598 ms
-
---- controller-0 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 0.598/0.598/0.598/0.000 ms
-PING worker-0 (192.168.8.20) 56(84) bytes of data.
-64 bytes from worker-0 (192.168.8.20): icmp_seq=1 ttl=64 time=0.474 ms
-
---- worker-0 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 0.474/0.474/0.474/0.000 ms
-PING controller-1 (192.168.8.11) 56(84) bytes of data.
-64 bytes from controller-1 (192.168.8.11): icmp_seq=1 ttl=64 time=0.546 ms
-
---- controller-1 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 0.546/0.546/0.546/0.000 ms
-PING worker-1 (192.168.8.21) 56(84) bytes of data.
-64 bytes from worker-1 (192.168.8.21): icmp_seq=1 ttl=64 time=1.10 ms
-
---- worker-1 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 1.101/1.101/1.101/0.000 ms
-PING controller-2 (192.168.8.12) 56(84) bytes of data.
-64 bytes from controller-2 (192.168.8.12): icmp_seq=1 ttl=64 time=0.483 ms
-
---- controller-2 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 0.483/0.483/0.483/0.000 ms
-PING worker-2 (192.168.8.22) 56(84) bytes of data.
-64 bytes from worker-2 (192.168.8.22): icmp_seq=1 ttl=64 time=0.650 ms
-
---- worker-2 ping statistics ---
-1 packets transmitted, 1 received, 0% packet loss, time 0ms
-rtt min/avg/max/mdev = 0.650/0.650/0.650/0.000 ms
-```
+(Repeat for each controller and worker as defined in your `/etc/hosts` file.)
 
 ## Configuring SSH Access
 
-SSH will be used to configure the controller and worker instances.
+SSH is used to manage the controller and worker nodes.
 
-On the `gateway-01` VM, generate SSH key for your working user:
+1. **Generate an SSH Key on gateway-245**
 
-```bash
-ssh-keygen
-```
+   On the **gateway-245** VM, run:
 
-> Output (example for the user nemo):
+   ```bash
+   ssh-keygen
+   ```
 
-```bash
-Generating public/private rsa key pair.
-Enter file in which to save the key (/home/nemo/.ssh/id_rsa):
-Created directory '/home/nemo/.ssh'.
-Enter passphrase (empty for no passphrase):
-Enter same passphrase again:
-Your identification has been saved in /home/nemo/.ssh/id_rsa.
-Your public key has been saved in /home/nemo/.ssh/id_rsa.pub.
-The key fingerprint is:
-SHA256:QIhkUeJWxh9lJRwfpJpkYXiuHjgE7icWVjo8dQzh+2Q nemo@gateway-01
-The key's randomart image is:
-+---[RSA 2048]----+
-| .=BBo+o=++      |
-|.oo*+=oo.+ .     |
-|o.*..++.. .      |
-| X. .oo+         |
-|o.+o Eo S        |
-| +o.*            |
-|. oo o           |
-|    .            |
-|                 |
-+----[SHA256]-----+
-```
+   Follow the prompts (for example, if you’re using the default file location and optionally a passphrase).
 
-Print the public key and copy it:
+2. **Display and Copy the Public Key**
 
-```bash
-cat /home/nemo/.ssh/id_rsa.pub
-```
+   Print your public key to the terminal:
 
-> Output (example for the user nemo):
+   ```bash
+   cat ~/.ssh/id_rsa.pub
+   ```
 
-```bash
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDZwdkThm90GKiBPcECnxqPfPIy0jz3KAVxS5i1GcfdOMmj947/iYlKrYVqXmPqHOy1vDRJQHD1KpkADSnXREoUJp6RpugR+qei962udVY+Y/eNV2JZRt/dcTlGwqSwKjjE8a5n84fu4zgJcvIIZYG/vJpN3ock189IuSjSeLSBAPU/UQzTDAcNnHEeHDv7Yo2wxGoDziM7sRGQyFLVHKJKtA28+OZT8DKaE4XY78ovmsMJuMDMF+YLKm12/f79xS0AYw0KXb97TAb9PhFMqqOKknN+mvzbccAih6gJEwB646Ju6VlBRBky7c6ZMsDR9l99uQtlXcv8lwiheYE4nJmF nemo@gateway-01
-```
+   Copy the output.
 
-On the controllers and workers nodes, create the `/root/.ssh` folder and create the file `/root/.ssh/authorized_keys` to paste the previously copied public key:
+3. **Deploy the Public Key on All Nodes**
 
-```bash
-mkdir -p /root/.ssh
-vi /root/.ssh/authorized_keys
-```
+   On each controller and worker node, create the SSH directory and paste the public key into `/root/.ssh/authorized_keys`:
 
-From the `gateway-01`, check if you can connect to the `root` account of all controllers and workers (example for controller-0):
+   ```bash
+   mkdir -p /root/.ssh
+   vi /root/.ssh/authorized_keys
+   ```
 
-```bash
-ssh root@controller-0
-```
+   Paste the copied key and save the file.
 
-> Output:
+4. **Test SSH Connectivity**
 
-```bash
-Welcome to Ubuntu 18.04.4 LTS (GNU/Linux 4.15.0-101-generic x86_64)
+   From **gateway-245**, try connecting to a node (for example, controller-211):
 
-...
+   ```bash
+   ssh root@controller-211
+   ```
 
-Last login: Sat Jun 20 11:03:45 2020 from 192.168.8.1
-root@controller-0:~#
-```
+   You should see a welcome message from the node. Exit the session by typing:
 
-Now, you can logout:
-
-```bash
-exit
-```
-
-> Output:
-
-```bash
-logout
-Connection to controller-0 closed.
-nemo@gateway-01:~$
-```
+   ```bash
+   exit
+   ```
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
+
+
+---
+
+This guide now reflects your topology:  
+- **gateway-245** has the public IP **10.10.12.245/24** (with an upstream gateway of **10.10.12.1**) and a private IP **192.168.1.245/24**.  
+- All Kubernetes nodes use the **192.168.1.0/24** network.  
+- The pod networks are planned in the **10.200.0.0/16** range.
+
+Feel free to adjust any subnets or hostnames further to fit your exact environment.
