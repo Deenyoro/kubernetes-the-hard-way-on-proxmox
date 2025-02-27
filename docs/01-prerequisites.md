@@ -10,7 +10,7 @@ The guide below reflects these changes.
 
 ---
 
-```markdown
+
 # Prerequisites
 
 ## Proxmox Hypervisor
@@ -20,6 +20,8 @@ This tutorial is intended to be performed with a [Proxmox](https://proxmox.com/e
 > The compute resources required for this tutorial are 25GB of RAM and 140GB HDD (or SSD).
 
 List of the VMs used in this tutorial:
+
+```markdown
 
 | Name          | Role                                   | vCPU | RAM  | Storage (thin) | IP                                               | OS     |
 |---------------|----------------------------------------|------|------|----------------|--------------------------------------------------|--------|
