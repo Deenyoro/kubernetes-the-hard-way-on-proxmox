@@ -1,12 +1,12 @@
 # Provisioning a CA and Generating TLS Certificates
 
-In this lab you will provision a [PKI Infrastructure](https://en.wikipedia.org/wiki/Public_key_infrastructure) using CloudFlare's PKI toolkit, [cfssl](https://github.com/cloudflare/cfssl), then use it to bootstrap a Certificate Authority, and generate TLS certificates for the following components: etcd, kube-apiserver, kube-controller-manager, kube-scheduler, kubelet, and kube-proxy.
+In this lab you will provision a [PKI Infrastructure](https://en.wikipedia.org/wiki/Public_key_infrastructure) using CloudFlare's PKI toolkit, [cfssl](https://github.com/cloudflare/cfssl). You will bootstrap a Certificate Authority (CA) and generate TLS certificates for etcd, kube-apiserver, kube-controller-manager, kube-scheduler, kubelet, kube-proxy, and the Kubernetes admin user.
+
+> **Note:** Run all commands on the **gateway-245** VM.
 
 ## Certificate Authority
 
-In this section you will provision a Certificate Authority that can be used to generate additional TLS certificates.
-
-On the `gateway-01` VM, generate the CA configuration file, certificate, and private key:
+Create the CA configuration file (`ca-config.json`):
 
 ```bash
 cat > ca-config.json <<EOF
@@ -24,7 +24,11 @@ cat > ca-config.json <<EOF
   }
 }
 EOF
+```
 
+Create the CA certificate signing request (`ca-csr.json`):
+
+```bash
 cat > ca-csr.json <<EOF
 {
   "CN": "Kubernetes",
@@ -34,33 +38,32 @@ cat > ca-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "Kubernetes",
       "OU": "CA",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
 EOF
+```
 
+Generate the CA certificate and key:
+
+```bash
 cfssl gencert -initca ca-csr.json | cfssljson -bare ca
 ```
 
-Results:
-
-```bash
-ca-key.pem
-ca.pem
-```
+This produces the files:  
+• `ca.pem`  
+• `ca-key.pem`
 
 ## Client and Server Certificates
 
-In this section you will generate client and server certificates for each Kubernetes component and a client certificate for the Kubernetes `admin` user.
-
 ### The Admin Client Certificate
 
-On the `gateway-01` VM, generate the `admin` client certificate and private key:
+Generate the admin client certificate and private key:
 
 ```bash
 cat > admin-csr.json <<EOF
@@ -72,11 +75,11 @@ cat > admin-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "system:masters",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -90,68 +93,65 @@ cfssl gencert \
   admin-csr.json | cfssljson -bare admin
 ```
 
-Results:
+This produces:  
+• `admin.pem`  
+• `admin-key.pem`
+
+### The Kubelet (Worker Node) Client Certificates
+
+Kubelets must identify themselves as members of the `system:nodes` group (with username `system:node:<nodeName>`). In your environment you have five worker nodes. First, set your gateway’s public IP:
 
 ```bash
-admin-key.pem
-admin.pem
+GATEWAY_PUBLIC_IP=10.10.12.245
 ```
 
-### The Kubelet Client Certificates
-
-Kubernetes uses a [special-purpose authorization mode](https://kubernetes.io/docs/admin/authorization/node/) called Node Authorizer, that specifically authorizes API requests made by [Kubelets](https://kubernetes.io/docs/concepts/overview/components/#kubelet). In order to be authorized by the Node Authorizer, Kubelets must use a credential that identifies them as being in the `system:nodes` group, with a username of `system:node:<nodeName>`. In this section you will create a certificate for each Kubernetes worker node that meets the Node Authorizer requirements.
-
-On the `gateway-01` VM, generate a certificate and private key for each Kubernetes worker node (you need to replace YOUR_EXTERNAL_IP by your external IP address):
+Then, for each worker node, generate a certificate. For example, using a Bash loop with an associative array:
 
 ```bash
-EXTERNAL_IP=YOUR_EXTERNAL_IP
+declare -A WORKERS=(
+  ["worker-214"]="192.168.1.214"
+  ["worker-241"]="192.168.1.241"
+  ["worker-242"]="192.168.1.242"
+  ["worker-243"]="192.168.1.243"
+  ["worker-244"]="192.168.1.244"
+)
 
-for id_instance in 0 1 2; do
-cat > worker-${id_instance}-csr.json <<EOF
+for worker in "${!WORKERS[@]}"; do
+  cat > ${worker}-csr.json <<EOF
 {
-  "CN": "system:node:worker-${id_instance}",
+  "CN": "system:node:${worker}",
   "key": {
     "algo": "rsa",
     "size": 2048
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "system:nodes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
 EOF
 
-INTERNAL_IP=192.168.8.2${id_instance}
-
-cfssl gencert \
-  -ca=ca.pem \
-  -ca-key=ca-key.pem \
-  -config=ca-config.json \
-  -hostname=worker-${id_instance},${EXTERNAL_IP},${INTERNAL_IP} \
-  -profile=kubernetes \
-  worker-${id_instance}-csr.json | cfssljson -bare worker-${id_instance}
+  cfssl gencert \
+    -ca=ca.pem \
+    -ca-key=ca-key.pem \
+    -config=ca-config.json \
+    -hostname=${worker},${GATEWAY_PUBLIC_IP},${WORKERS[$worker]} \
+    -profile=kubernetes \
+    ${worker}-csr.json | cfssljson -bare ${worker}
 done
 ```
 
-Results:
-
-```bash
-worker-0-key.pem
-worker-0.pem
-worker-1-key.pem
-worker-1.pem
-worker-2-key.pem
-worker-2.pem
-```
+This produces for each worker:  
+• `<worker>.pem` and `<worker>-key.pem` (for example, `worker-214.pem` and `worker-214-key.pem`).
 
 ### The Controller Manager Client Certificate
 
-On the `gateway-01` VM, generate the `kube-controller-manager` client certificate and private key:
+Generate the kube-controller-manager certificate and key:
 
 ```bash
 cat > kube-controller-manager-csr.json <<EOF
@@ -163,11 +163,11 @@ cat > kube-controller-manager-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "system:kube-controller-manager",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -181,16 +181,13 @@ cfssl gencert \
   kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
 ```
 
-Results:
-
-```bash
-kube-controller-manager-key.pem
-kube-controller-manager.pem
-```
+This produces:  
+• `kube-controller-manager.pem`  
+• `kube-controller-manager-key.pem`
 
 ### The Kube Proxy Client Certificate
 
-On the `gateway-01` VM, generate the `kube-proxy` client certificate and private key:
+Generate the kube-proxy certificate and key:
 
 ```bash
 cat > kube-proxy-csr.json <<EOF
@@ -202,11 +199,11 @@ cat > kube-proxy-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "system:node-proxier",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -220,16 +217,13 @@ cfssl gencert \
   kube-proxy-csr.json | cfssljson -bare kube-proxy
 ```
 
-Results:
-
-```bash
-kube-proxy-key.pem
-kube-proxy.pem
-```
+This produces:  
+• `kube-proxy.pem`  
+• `kube-proxy-key.pem`
 
 ### The Scheduler Client Certificate
 
-On the `gateway-01` VM, generate the `kube-scheduler` client certificate and private key:
+Generate the kube-scheduler certificate and key:
 
 ```bash
 cat > kube-scheduler-csr.json <<EOF
@@ -241,11 +235,11 @@ cat > kube-scheduler-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "system:kube-scheduler",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -259,23 +253,22 @@ cfssl gencert \
   kube-scheduler-csr.json | cfssljson -bare kube-scheduler
 ```
 
-Results:
-
-```bash
-kube-scheduler-key.pem
-kube-scheduler.pem
-```
+This produces:  
+• `kube-scheduler.pem`  
+• `kube-scheduler-key.pem`
 
 ### The Kubernetes API Server Certificate
 
-The `kubernetes-the-hard-way` static IP address will be included in the list of subject alternative names for the Kubernetes API Server certificate. This will ensure the certificate can be validated by remote clients.
+The API server certificate must cover both the internal service IP and all controller node IPs, as well as the public address. In your environment, assume:  
+- The service IP remains **10.32.0.1**  
+- The controllers are at **192.168.1.211**, **192.168.1.212**, and **192.168.1.213**  
+- The public IP (used by remote clients) is **10.10.12.245**
 
-On the `gateway-01` VM, generate the Kubernetes API Server certificate and private key (you need to replace YOUR_EXTERNAL_IP by your external IP address):
+Also include the standard DNS names for Kubernetes:
 
 ```bash
-KUBERNETES_PUBLIC_ADDRESS=YOUR_EXTERNAL_IP
-
-KUBERNETES_HOSTNAMES=kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local
+KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
+KUBERNETES_HOSTNAMES="kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.svc.cluster.local"
 
 cat > kubernetes-csr.json <<EOF
 {
@@ -286,11 +279,11 @@ cat > kubernetes-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "Kubernetes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -300,25 +293,18 @@ cfssl gencert \
   -ca=ca.pem \
   -ca-key=ca-key.pem \
   -config=ca-config.json \
-  -hostname=10.32.0.1,192.168.8.10,192.168.8.11,192.168.8.12,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,${KUBERNETES_HOSTNAMES} \
+  -hostname=10.32.0.1,192.168.1.211,192.168.1.212,192.168.1.213,${KUBERNETES_PUBLIC_ADDRESS},127.0.0.1,${KUBERNETES_HOSTNAMES} \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
 ```
 
-> The Kubernetes API server is automatically assigned the `kubernetes` internal dns name, which will be linked to the first IP address (`10.32.0.1`) from the address range (`10.32.0.0/24`) reserved for internal cluster services during the [control plane bootstrapping](08-bootstrapping-kubernetes-controllers.md#configure-the-kubernetes-api-server) lab.
-
-Results:
-
-```bash
-kubernetes-key.pem
-kubernetes.pem
-```
+This produces:  
+• `kubernetes.pem`  
+• `kubernetes-key.pem`
 
 ## The Service Account Key Pair
 
-The Kubernetes Controller Manager leverages a key pair to generate and sign service account tokens as described in the [managing service accounts](https://kubernetes.io/docs/admin/service-accounts-admin/) documentation.
-
-On the `gateway-01` VM, generate the `service-account` certificate and private key:
+Generate a key pair for signing service account tokens:
 
 ```bash
 cat > service-account-csr.json <<EOF
@@ -330,11 +316,11 @@ cat > service-account-csr.json <<EOF
   },
   "names": [
     {
-      "C": "FR",
-      "L": "Rennes",
+      "C": "US",
+      "L": "Pittsburgh",
       "O": "Kubernetes",
       "OU": "Kubernetes The Hard Way",
-      "ST": "Bretagne"
+      "ST": "PA"
     }
   ]
 }
@@ -348,32 +334,42 @@ cfssl gencert \
   service-account-csr.json | cfssljson -bare service-account
 ```
 
-Results:
-
-```bash
-service-account-key.pem
-service-account.pem
-```
+This produces:  
+• `service-account.pem`  
+• `service-account-key.pem`
 
 ## Distribute the Client and Server Certificates
 
-Copy the appropriate certificates and private keys to each worker instance:
+### To Worker Nodes
+
+Copy the following files to each worker node (in your case: **worker-214**, **worker-241**, **worker-242**, **worker-243**, **worker-244**):
 
 ```bash
-for instance in worker-0 worker-1 worker-2; do
+for instance in worker-214 worker-241 worker-242 worker-243 worker-244; do
   scp ca.pem ${instance}-key.pem ${instance}.pem root@${instance}:~/
 done
 ```
 
-Copy the appropriate certificates and private keys to each controller instance:
+### To Controller Nodes
+
+Copy the following files to each controller node (**controller-211**, **controller-212**, **controller-213**):
 
 ```bash
-for instance in controller-0 controller-1 controller-2; do
+for instance in controller-211 controller-212 controller-213; do
   scp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
     service-account-key.pem service-account.pem root@${instance}:~/
 done
 ```
 
-> The `kube-proxy`, `kube-controller-manager`, `kube-scheduler`, and `kubelet` client certificates will be used to generate client authentication configuration files in the next lab.
+> In later labs, the `kube-proxy`, `kube-controller-manager`, `kube-scheduler`, and `kubelet` client certificates will be used to generate client authentication configuration files.
 
 Next: [Generating Kubernetes Configuration Files for Authentication](05-kubernetes-configuration-files.md)
+
+
+---
+
+This updated guide now reflects your environment with:  
+- **gateway-245**: Public IP **10.10.12.245**; Private IP **192.168.1.245**  
+- **Controllers**: **192.168.1.211**, **192.168.1.212**, **192.168.1.213**  
+- **Workers**: worker-214 (192.168.1.214), worker-241 (192.168.1.241), worker-242 (192.168.1.242), worker-243 (192.168.1.243), worker-244 (192.168.1.244)  
+- Region details updated to **US**, **Pittsburgh**, **PA**
