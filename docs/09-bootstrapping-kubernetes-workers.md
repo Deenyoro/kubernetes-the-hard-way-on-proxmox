@@ -1,22 +1,45 @@
+Below is the revised guide for bootstrapping your Kubernetes worker nodes in your Pittsburgh, PA environment. In your setup, the worker nodes are named as follows:
+
+- **worker-214** with IP: 192.168.1.214  
+- **worker-241** with IP: 192.168.1.241  
+- **worker-242** with IP: 192.168.1.242  
+- **worker-243** with IP: 192.168.1.243  
+- **worker-244** with IP: 192.168.1.244
+
+Each worker node will run the following components: [runc](https://github.com/opencontainers/runc), [container networking plugins](https://github.com/containernetworking/cni), [containerd](https://github.com/containerd/containerd), [kubelet](https://kubernetes.io/docs/admin/kubelet), and [kube-proxy](https://kubernetes.io/docs/concepts/cluster-administration/proxies).
+
+The instructions below assume you’ll set a unique Pod CIDR for each worker. For example, you might assign:
+- **worker-214**: 10.200.0.0/24  
+- **worker-241**: 10.200.1.0/24  
+- **worker-242**: 10.200.2.0/24  
+- **worker-243**: 10.200.3.0/24  
+- **worker-244**: 10.200.4.0/24
+
+Follow these steps on each worker node (log in via SSH, e.g., `ssh root@worker-214`):
+
+---
+
 # Bootstrapping the Kubernetes Worker Nodes
 
-In this lab you will bootstrap three Kubernetes worker nodes. The following components will be installed on each node: [runc](https://github.com/opencontainers/runc), [container networking plugins](https://github.com/containernetworking/cni), [containerd](https://github.com/containerd/containerd), [kubelet](https://kubernetes.io/docs/admin/kubelet), and [kube-proxy](https://kubernetes.io/docs/concepts/cluster-administration/proxies).
+In this lab you will bootstrap the Kubernetes worker nodes. Each worker node in our Pittsburgh, PA environment will run runc, container networking plugins, containerd, kubelet, and kube-proxy.
 
 ## Prerequisites
 
-The commands in this lab must be run on each worker instance: `worker-0`, `worker-1`, and `worker-2`. Login to each worker instance using the `ssh` command. Example:
+Run these commands on each worker node: **worker-214**, **worker-241**, **worker-242**, **worker-243**, and **worker-244**. For example:
 
 ```bash
-ssh root@worker-0
+ssh root@worker-214
 ```
 
-### Running commands in parallel with tmux
+### Running Commands in Parallel with tmux
 
-[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands on multiple compute instances at the same time. See the [Running commands in parallel with tmux](01-prerequisites.md#running-commands-in-parallel-with-tmux) section in the Prerequisites lab.
+[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands simultaneously on multiple nodes. See the [Running commands in parallel with tmux](01-prerequisites.md#running-commands-in-parallel-with-tmux) section in the Prerequisites lab.
 
 ## Provisioning a Kubernetes Worker Node
 
-Install the OS dependencies:
+### 1. Install OS Dependencies
+
+Update packages and install required utilities:
 
 ```bash
 sudo apt-get update
@@ -25,25 +48,25 @@ sudo apt-get -y install socat conntrack ipset
 
 > The socat binary enables support for the `kubectl port-forward` command.
 
-### Disable Swap
+### 2. Disable Swap
 
-By default the kubelet will fail to start if [swap](https://help.ubuntu.com/community/SwapFaq) is enabled. It is [recommended](https://github.com/kubernetes/kubernetes/issues/7294) that swap be disabled to ensure Kubernetes can provide proper resource allocation and quality of service.
-
-Verify if swap is enabled:
+Kubelet requires swap to be disabled. Check swap status:
 
 ```bash
 sudo swapon --show
 ```
 
-If output is empty then swap is not enabled. If swap is enabled run the following command to disable swap immediately:
+If swap is enabled, disable it immediately:
 
 ```bash
 sudo swapoff -a
 ```
 
-> To ensure swap remains off after reboot consult your Linux distro documentation. You may need to comment the Swap line in the `/etc/fstab` file.
+> To disable swap permanently, comment out the swap entry in `/etc/fstab` as needed.
 
-### Download and Install Worker Binaries
+### 3. Download and Install Worker Binaries
+
+Download the necessary binaries:
 
 ```bash
 wget -q --show-progress --https-only --timestamping \
@@ -68,7 +91,7 @@ sudo mkdir -p \
   /var/run/kubernetes
 ```
 
-Install the worker binaries:
+Install the binaries:
 
 ```bash
 mkdir containerd
@@ -81,17 +104,17 @@ sudo mv crictl kubectl kube-proxy kubelet runc /usr/local/bin/
 sudo mv containerd/bin/* /bin/
 ```
 
-### Configure CNI Networking
+### 4. Configure CNI Networking
 
-Define the Pod CIDR range for the current node (different for each worker). Replace THE_POD_CIDR by the CIDR network for this node (see network architecture):
+Define the Pod CIDR for the current node. Replace `THE_POD_CIDR` with the appropriate CIDR. For example, on **worker-214**:
 
 ```bash
-POD_CIDR=THE_POD_CIDR
+POD_CIDR=10.200.0.0/24
 ```
 
-> Example for worker-0: 10.200.0.0/24
+> On other nodes, assign a unique CIDR (e.g., worker-241: 10.200.1.0/24, etc.).
 
-Create the `bridge` network configuration file:
+Create the bridge network configuration:
 
 ```bash
 cat <<EOF | sudo tee /etc/cni/net.d/10-bridge.conf
@@ -113,7 +136,7 @@ cat <<EOF | sudo tee /etc/cni/net.d/10-bridge.conf
 EOF
 ```
 
-Create the `loopback` network configuration file:
+Create the loopback network configuration:
 
 ```bash
 cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
@@ -125,20 +148,21 @@ cat <<EOF | sudo tee /etc/cni/net.d/99-loopback.conf
 EOF
 ```
 
-### Configure containerd
+### 5. Configure containerd
 
-Create the `containerd` configuration file:
+Create the containerd configuration directory:
 
 ```bash
 sudo mkdir -p /etc/containerd/
 ```
-Set up containerd configuration to enable systemd Cgroups
+
+Generate the default containerd configuration with systemd Cgroups enabled:
 
 ```bash
- containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+containerd config default | sed 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
 ```
 
-Create the `containerd.service` systemd unit file:
+Create the containerd systemd service unit:
 
 ```bash
 cat <<EOF | sudo tee /etc/systemd/system/containerd.service
@@ -164,7 +188,9 @@ WantedBy=multi-user.target
 EOF
 ```
 
-### Configure the Kubelet
+### 6. Configure the Kubelet
+
+Assuming you have already copied the worker node’s certificates and kubeconfig file to the node (with filenames matching the hostname, e.g. **worker-214.pem**, **worker-214-key.pem**, and **worker-214.kubeconfig**), move them into place:
 
 ```bash
 sudo mv ${HOSTNAME}-key.pem ${HOSTNAME}.pem /var/lib/kubelet/
@@ -172,7 +198,7 @@ sudo mv ${HOSTNAME}.kubeconfig /var/lib/kubelet/kubeconfig
 sudo mv ca.pem /var/lib/kubernetes/
 ```
 
-Create the `kubelet-config.yaml` configuration file:
+Create the kubelet configuration file:
 
 ```bash
 cat <<EOF | sudo tee /var/lib/kubelet/kubelet-config.yaml
@@ -194,14 +220,12 @@ clusterDNS:
 podCIDR: "${POD_CIDR}"
 resolvConf: "/run/systemd/resolve/resolv.conf"
 runtimeRequestTimeout: "15m"
-tlsCertFile: "/var/lib/kubelet/${HOSTNAME}.pem"
-tlsPrivateKeyFile: "/var/lib/kubelet/${HOSTNAME}-key.pem"
+tlsCertFile: "/var/lib/kubelet/\${HOSTNAME}.pem"
+tlsPrivateKeyFile: "/var/lib/kubelet/\${HOSTNAME}-key.pem"
 EOF
 ```
 
-> The `resolvConf` configuration is used to avoid loops when using CoreDNS for service discovery on systems running `systemd-resolved`.
-
-Create the `kubelet.service` systemd unit file:
+Create the kubelet systemd service unit:
 
 ```bash
 cat <<EOF | sudo tee /etc/systemd/system/kubelet.service
@@ -224,13 +248,15 @@ WantedBy=multi-user.target
 EOF
 ```
 
-### Configure the Kubernetes Proxy
+### 7. Configure the Kubernetes Proxy
+
+Move the kube-proxy kubeconfig into place:
 
 ```bash
 sudo mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig
 ```
 
-Create the `kube-proxy-config.yaml` configuration file:
+Create the kube-proxy configuration file:
 
 ```bash
 cat <<EOF | sudo tee /var/lib/kube-proxy/kube-proxy-config.yaml
@@ -243,7 +269,7 @@ clusterCIDR: "10.200.0.0/16"
 EOF
 ```
 
-Create the `kube-proxy.service` systemd unit file:
+Create the kube-proxy systemd service unit:
 
 ```bash
 cat <<EOF | sudo tee /etc/systemd/system/kube-proxy.service
@@ -262,7 +288,9 @@ WantedBy=multi-user.target
 EOF
 ```
 
-### Start the Worker Services
+### 8. Start the Worker Services
+
+Reload systemd and enable/start containerd, kubelet, and kube-proxy:
 
 ```bash
 sudo systemctl daemon-reload
@@ -270,35 +298,38 @@ sudo systemctl enable containerd kubelet kube-proxy
 sudo systemctl start containerd kubelet kube-proxy
 ```
 
-> Remember to run the above commands on each worker node: `worker-0`, `worker-1`, and `worker-2`.
+> **Note:** Run these commands on each worker node: **worker-214**, **worker-241**, **worker-242**, **worker-243**, and **worker-244**.
 
 ## Verification
 
-List the registered Kubernetes nodes:
+From one of your controller nodes (for example, controller-211), check that all worker nodes have registered:
 
 ```bash
-ssh root@controller-0 kubectl get nodes --kubeconfig admin.kubeconfig
+ssh root@controller-211 kubectl get nodes --kubeconfig admin.kubeconfig
 ```
 
-> Output:
+Expected output:
 
 ```bash
-NAME       STATUS   ROLES    AGE   VERSION
-worker-0   Ready    <none>   15s   v1.29.1
-worker-1   Ready    <none>   15s   v1.29.1
-worker-2   Ready    <none>   15s   v1.29.1
+NAME         STATUS   ROLES    AGE   VERSION
+worker-214   Ready    <none>   ...   v1.29.1
+worker-241   Ready    <none>   ...   v1.29.1
+worker-242   Ready    <none>   ...   v1.29.1
+worker-243   Ready    <none>   ...   v1.29.1
+worker-244   Ready    <none>   ...   v1.29.1
 ```
 
-> [!NOTE]
-> By default kube-proxy uses iptables to set up Service IP handling and load balancing. Unfortunately, it breaks our deployment and there's a hack to force Linux to run iptables even for bridge-only traffic:
-> 
-> Run this on all control and worker nodes. 
+> **Additional Note:**  
+> To ensure iptables works correctly with bridge-only traffic, load the `br_netfilter` module on all nodes (controllers and workers):
 
 ```bash
 sudo modprobe br_netfilter
-echo "br-netfilter" >> /etc/modules-load.d/modules.conf
-sysctl -w net.bridge.bridge-nf-call-iptables=1
+echo "br-netfilter" | sudo tee -a /etc/modules-load.d/modules.conf
+sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
 ```
 
-
 Next: [Configuring kubectl for Remote Access](10-configuring-kubectl.md)
+
+---
+
+This revised guide has been updated for your Pittsburgh, PA environment with your actual worker node names and internal IP addressing as reflected in your netplan and hosts files.
