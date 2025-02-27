@@ -1,293 +1,336 @@
+Below is an updated version of the guide adapted to your topology. In this setup:
+
+- Your upstream (ISP or router) default gateway is **10.10.12.1**.
+- Your gateway VM (which acts as NAT, reverse proxy, and client tools host) has:
+  - A **public interface** with IP **10.10.12.245/24** (used to reach the internet via 10.10.12.1).
+  - A **private interface** with IP **192.168.1.245/24**.
+- Your Kubernetes nodes (controllers and workers) use addresses in the **192.168.1.0/24** subnet.
+
+The guide below reflects these changes.
+
+---
+
+```markdown
 # Prerequisites
 
 ## Proxmox Hypervisor
 
-This tutorial is intended to be performed with a [Proxmox](https://proxmox.com/en/) hypervisor, but you can also use it with ESXi, KVM, Virtualbox or other hypervisor.
+This tutorial is intended to be performed with a [Proxmox](https://proxmox.com/en/) hypervisor, but you can also use it with ESXi, KVM, Virtualbox, or another hypervisor.
 
-> The compute resources required for this tutorial is 25GB of RAM and 140GB HDD (or SSD).
+> The compute resources required for this tutorial are 25GB of RAM and 140GB HDD (or SSD).
 
-List of the VM used in this tutorial :
+List of the VMs used in this tutorial:
 
-|Name|Role|vCPU|RAM|Storage (thin)|IP|OS|
-|--|--|--|--|--|--|--|
-|controller-0|controller|2|4GB|20GB|192.168.8.10/24|Ubuntu|
-|controller-1|controller|2|4GB|20GB|192.168.8.11/24|Ubuntu|
-|controller-2|controller|2|4GB|20GB|192.168.8.12/24|Ubuntu|
-|worker-0|worker|2|4GB|20GB|192.168.8.20/24|Ubuntu|
-|worker-1|worker|2|4GB|20GB|192.168.8.21/24|Ubuntu|
-|worker-2|worker|2|4GB|20GB|192.168.8.22/24|Ubuntu|
-|gateway-01|Reverse Proxy, client tools, gateway|1|1GB|20GB|192.168.8.1/24 + PUBLIC IP|Debian|
+| Name          | Role                                   | vCPU | RAM  | Storage (thin) | IP                                               | OS     |
+|---------------|----------------------------------------|------|------|----------------|--------------------------------------------------|--------|
+| controller-211 | Controller                           | 2    | 4GB  | 20GB           | 192.168.1.211/24                                 | Ubuntu |
+| controller-212 | Controller                           | 2    | 4GB  | 20GB           | 192.168.1.212/24                                 | Ubuntu |
+| controller-213 | Controller                           | 2    | 4GB  | 20GB           | 192.168.1.213/24                                 | Ubuntu |
+| worker-214    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.214/24                                 | Ubuntu |
+| worker-241    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.241/24                                 | Ubuntu |
+| worker-242    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.242/24                                 | Ubuntu |
+| worker-243    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.243/24                                 | Ubuntu |
+| worker-244    | Worker                                | 2    | 4GB  | 20GB           | 192.168.1.244/24                                 | Ubuntu |
+| gateway-245   | Reverse Proxy, Client Tools, Gateway    | 1    | 1GB  | 20GB           | Private: 192.168.1.245/24 <br> Public: 10.10.12.245/24 | Debian |
 
-On the Proxmox hypervisor, I just added the `k8s-` prefix in the VM names.
+On the Proxmox hypervisor, you might choose to add a `k8s-` prefix to the VM names if desired.
 
 ![proxmox vm list](images/proxmox-vm-list.PNG)
 
-## Prepare the environment
+## Prepare the Environment
 
-### Hypervisor network
+### Hypervisor Network
 
-For this tutorial, you need 2 networks on your Proxmox hypervisor :
+For this tutorial, you need 2 networks on your Proxmox hypervisor:
 
-* a public network bridge (`vmbr0` in the following screenshot).
-* a private Kubernetes network bridge (`vmbr8` in the following screenshot).
+- A public network bridge (e.g., `vmbr0`).
+- A private Kubernetes network bridge (e.g., `vmbr8`).
 
-![proxmox network](images/proxmox-network.PNG)
+> Note: The pod networks will be defined later.
 
-> Note: the pods networks will be defined later.
-
-All the Kubernetes nodes (workers and controllers) only need one network interface linked to the private Kubernetes network (`vmbr8`).
+All Kubernetes nodes (workers and controllers) require only one network interface linked to the private Kubernetes network (`vmbr8`).
 
 ![proxmox vm hardware](images/proxmox-vm-hardware.PNG)
 
-The reverse proxy / client tools / gateway VM needs 2 network interfaces, one linked to the private Kubernetes network (`vmbr8`) and the other linked to the public network (`vmbr0`).
+The reverse proxy / client tools / gateway VM needs 2 network interfaces:
+- One linked to the private Kubernetes network (`vmbr8`).
+- One linked to the public network (`vmbr0`).
 
 ![proxmox vm hardware](images/proxmox-vm-hardware-gw.PNG)
 
-### Network architecture
+### Network Architecture
 
 This diagram represents the network design:
+
+- **Public Network:**
+  - **Gateway VM public interface:** 10.10.12.245/24  
+  - **Default gateway (upstream router):** 10.10.12.1
+- **Private Kubernetes Network:**
+  - **Kubernetes nodes (controllers and workers):** 192.168.1.0/24  
+  - **Gateway VM private interface:** 192.168.1.245/24
 
 ![architecture network](images/architecture-network.png)
 
 > If you want, you can define the IPv6 stack configuration.
 
-### Gateway VM installation
+---
 
-> The basic VM installation process is not the purpose of this tutorial.
+### Gateway VM Installation
+
+> The basic VM installation process is not the focus of this tutorial.
 >
-> Because it's just a tutorial, the IPv6 stack is not configured, but you can configure it if you want.
+> For brevity, IPv6 is not configured here (but you may configure it if desired).
 
-This VM is used as a NAT gateway for the private Kubernetes network, as a reverse proxy and as a client tools.
+This VM is used as a NAT gateway for the private Kubernetes network, as a reverse proxy, and as a host for client tools (such as for certificate generation).
 
-This means all the client steps like certificates generation will be done on this VM (in the next parts of this tutorial).
+Perform the following steps on the gateway VM:
 
-You have to:
+1. **Install the Debian netinst image**
 
-* Install the latest [amd64 Debian netinst image](https://www.debian.org/CD/netinst/) on this VM.
+   Download and install the latest [amd64 Debian netinst image](https://www.debian.org/CD/netinst/).
 
-* Configure the network interfaces (see the network architecture). Example of `/etc/network/interfaces` file if your public interface is ens18 and your private interface is ens19 (you need to replace `PUBLIC_IP_ADDRESS`, `MASK` and `PUBLIC_IP_GATEWAY` with your values):
+2. **Configure the network interfaces**
 
-```bash
-source /etc/network/interfaces.d/*
+   Edit `/etc/network/interfaces` (assuming your public interface is `ens18` and your private interface is `ens19`). Replace the placeholders with your actual values:
 
-# The loopback network interface
-auto lo
-iface lo inet loopback
+   ```bash
+   source /etc/network/interfaces.d/*
 
-# The public network interface
-auto ens18
-allow-hotplug ens18
-iface ens18 inet static
-        address PUBLIC_IP_ADDRESS/MASK
-        gateway PUBLIC_IP_GATEWAY
-        dns-nameservers 9.9.9.9
+   # The loopback network interface
+   auto lo
+   iface lo inet loopback
 
-# The private network interface
-auto ens19
-allow-hotplug ens19
-iface ens19 inet static
-        address 192.168.8.1/24
-        dns-nameservers 9.9.9.9
-```
+   # The public network interface
+   auto ens18
+   allow-hotplug ens18
+   iface ens18 inet static
+           address 10.10.12.245/24
+           gateway 10.10.12.1
+           dns-nameservers 9.9.9.9
 
-> If you want, you can define the IPv6 stack configuration.
+   # The private network interface
+   auto ens19
+   allow-hotplug ens19
+   iface ens19 inet static
+           address 192.168.1.245/24
+           dns-nameservers 9.9.9.9
+   ```
+
+   > If you wish, you can also configure IPv6 and/or a different DNS resolver.
+
+3. **Set the VM hostname**
+
+   ```bash
+   sudo hostnamectl set-hostname gateway-245
+   ```
+
+4. **Update the system**
+
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y
+   ```
+
+5. **Install required packages**
+
+   ```bash
+   sudo apt-get install ssh vim tmux curl ntp iptables-persistent -y
+   ```
+
+6. **Enable and start SSH and NTP services**
+
+   ```bash
+   sudo systemctl enable ntp
+   sudo systemctl start ntp
+   sudo systemctl enable ssh
+   sudo systemctl start ssh
+   ```
+
+7. **Enable IP routing**
+
+   ```bash
+   sudo sh -c "echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf"
+   sudo sh -c "echo '1' > /proc/sys/net/ipv4/ip_forward"
+   ```
+
+8. **Configure the iptables firewall**
+
+   Create or edit `/etc/iptables/rules.v4` (assuming `ens18` is public and `ens19` is private):
+
+   ```bash
+   # Generated by xtables-save on [date]
+   *nat
+   -A POSTROUTING -o ens18 -j MASQUERADE
+   COMMIT
+
+   *filter
+   -A INPUT -i lo -j ACCEPT
+   # Allow SSH so that you don't lock yourself out
+   -A INPUT -i ens18 -p tcp -m tcp --dport 22 -j ACCEPT
+   -A INPUT -i ens18 -p tcp -m tcp --dport 80 -j ACCEPT
+   -A INPUT -i ens18 -p tcp -m tcp --dport 443 -j ACCEPT
+   -A INPUT -i ens18 -p tcp -m tcp --dport 6443 -j ACCEPT
+   -A INPUT -i ens18 -p icmp -j ACCEPT
+   # Allow established connections
+   -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+   # Drop everything else on ens18
+   -A INPUT -i ens18 -j DROP
+   COMMIT
+   ```
+
+   > Again, you can configure IPv6 if needed.
+
+9. **Activate the iptables rules**
+
+   ```bash
+   sudo iptables-restore < /etc/iptables/rules.v4
+   ```
+
+10. **Configure the `/etc/hosts` file**
+
+    Edit `/etc/hosts` so it looks like this:
+
+    ```plaintext
+    127.0.0.1       localhost
+    10.10.12.245    gateway-245.external gateway-245
+
+    # IPv6 (optional)
+    ::1             localhost ip6-localhost ip6-loopback
+    ff02::1         ip6-allnodes
+    ff02::2         ip6-allrouters
+
+    192.168.1.211   controller-211
+    192.168.1.212   controller-212
+    192.168.1.213   controller-213
+
+    192.168.1.214   worker-214
+    192.168.1.241   worker-241
+    192.168.1.242   worker-242
+    192.168.1.243   worker-243
+    192.168.1.244   worker-244
+    ```
+
+11. **Reboot to confirm the network configuration**
+
+    ```bash
+    sudo reboot
+    ```
+
+---
+
+### Kubernetes Nodes VM Installation
+
+> The basic VM installation process is not the focus of this tutorial.
 >
-> If you want, you can use another DNS resolver.
+> IPv6 is not configured by default, but you can set it up if desired.
 
-* Define the VM hostname:
+These VMs serve as Kubernetes nodes (controllers or workers). You can configure one, clone it, and then adjust the IP address and hostname for each clone.
 
-```bash
-sudo hostnamectl set-hostname gateway-01
-```
+For each node, perform the following steps:
 
-* Update the packages list and update the system:
+1. **Install Ubuntu 22.04.3 LTS Server**
 
-```bash
-sudo apt-get update && sudo apt-get upgrade -y
-```
+   Download and install the [Ubuntu 22.04.3 LTS Server image](https://releases.ubuntu.com/22.04/).
 
-* Install SSH, vim, tmux, curl, NTP and iptables-persistent:
+2. **Configure the network interface**
 
-```bash
-sudo apt-get install ssh vim tmux curl ntp iptables-persistent -y
-```
+   Edit `/etc/netplan/00-installer-config.yaml` (assuming `ens18` is the private interface). For example:
 
-* Enable and start the SSH and NTP services:
+   ```yaml
+   # This is the network config written by 'subiquity'
+   network:
+     ethernets:
+       ens18:
+         addresses:
+         - 192.168.1.X/24
+         gateway4: 192.168.1.245
+         nameservers:
+           addresses:
+           - 9.9.9.9
+     version: 2
+   ```
 
-```bash
-sudo systemctl enable ntp
-sudo systemctl start ntp
-sudo systemctl enable ssh
-sudo systemctl start ssh
-```
+   Replace `192.168.1.X` with the appropriate IP for the node (e.g., `192.168.1.211` for controller-211).
 
-* Enable IP routing:
+3. **Set the hostname**
 
-```bash
-sudo echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
-sudo echo '1' > /proc/sys/net/ipv4/ip_forward
-```
+   For example, on controller-211:
 
-> If you want, you can define the IPv6 stack configuration.
+   ```bash
+   sudo hostnamectl set-hostname controller-211
+   ```
 
-* Configure the iptables firewall (allow some ports and configure NAT). Example of `/etc/iptables/rules.v4` file if ens18 is your public interface and ens19 is your private interface:
+4. **Update and upgrade the system**
 
-```bash
-# Generated by xtables-save v1.8.2 on Fri Jun  5 16:45:02 2020
-*nat
--A POSTROUTING -o ens18 -j MASQUERADE
-COMMIT
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y
+   ```
 
-*filter
--A INPUT -i lo -j ACCEPT
-# allow ssh, so that we do not lock ourselves
--A INPUT -i ens18 -p tcp -m tcp --dport 22 -j ACCEPT
--A INPUT -i ens18 -p tcp -m tcp --dport 80 -j ACCEPT
--A INPUT -i ens18 -p tcp -m tcp --dport 443 -j ACCEPT
--A INPUT -i ens18 -p tcp -m tcp --dport 6443 -j ACCEPT
--A INPUT -i ens18 -p icmp -j ACCEPT
-# allow incoming traffic to the outgoing connections,
-# et al for clients from the private network
--A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-# prohibit everything else incoming
--A INPUT -i ens18 -j DROP
-COMMIT
-# Completed on Fri Jun  5 16:45:02 2020
-```
+5. **Install SSH and NTP**
 
-> If you want, you can define the IPv6 stack configuration.
+   ```bash
+   sudo apt-get install ssh ntp -y
+   ```
 
-* If you want to restore/active iptables rules:
+6. **Enable and start SSH and NTP services**
 
-```bash
-sudo iptables-restore < /etc/iptables/rules.v4
-```
+   ```bash
+   sudo systemctl enable ntp
+   sudo systemctl start ntp
+   sudo systemctl enable ssh
+   sudo systemctl start ssh
+   ```
 
-* Configure the `/etc/hosts` file (you need to replace `PUBLIC_GW_IP`):
+7. **Configure the `/etc/hosts` file**
 
-```bash
-127.0.0.1       localhost
-PUBLIC_GW_IP    gateway-01.external gateway-01
+   An example for controller-211:
 
-# The following lines are desirable for IPv6 capable hosts
-::1     localhost ip6-localhost ip6-loopback
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
+   ```plaintext
+   127.0.0.1 localhost
+   127.0.1.1 controller-211
 
-192.168.8.10    controller-0
-192.168.8.11    controller-1
-192.168.8.12    controller-2
+   # IPv6 (optional)
+   ::1             ip6-localhost ip6-loopback
+   fe00::0         ip6-localnet
+   ff00::0         ip6-mcastprefix
+   ff02::1         ip6-allnodes
+   ff02::2         ip6-allrouters
 
-192.168.8.20    worker-0
-192.168.8.21    worker-1
-192.168.8.22    worker-2
-```
+   10.10.12.245    gateway-245.external
+   192.168.1.245   gateway-245
 
-* To confirm the network configuration, reboot the VM and check the active IP addresses:
+   192.168.1.212   controller-212
+   192.168.1.213   controller-213
 
-```bash
-sudo reboot
-```
+   192.168.1.214   worker-214
+   192.168.1.241   worker-241
+   192.168.1.242   worker-242
+   192.168.1.243   worker-243
+   192.168.1.244   worker-244
+   ```
 
-### Kubernetes nodes VM installation
+8. **Reboot to confirm the network configuration**
 
-> The basic VM installation process is not the purpose of this tutorial.
->
-> Because it's just a tutorial, the IPv6 stack is not configured, but you can configure it if you want.
+   ```bash
+   sudo reboot
+   ```
 
-These VM are used as Kubernetes node (controllers or workers).
-
-The basic VM configuration process is the same for the 6 VM (you can also configure one, clone it and change IP address and hostname for each clone).
-
-You have to:
-
-* Install the [Ubuntu 22.04.3 LTS Server install image](https://releases.ubuntu.com/22.04/) on this VM.
-
-* Configure the network interface (see the network architecture). Example of `/etc/netplan/00-installer-config.yaml` file if ens18 is the name of your private network interface (you need to change the IP address depending on the installed server):
-
-```bash
-# This is the network config written by 'subiquity'
-network:
-  ethernets:
-    ens18:
-      addresses:
-      - 192.168.8.10/24
-      gateway4: 192.168.8.1
-      nameservers:
-        addresses:
-        - 9.9.9.9
-  version: 2
-```
-
-> If you want, you can define the IPv6 stack configuration.
->
-> If you want, you can use another DNS resolver.
-
-* Define the VM hostname (example for controller-0):
-
-```bash
-sudo hostnamectl set-hostname controller-0
-```
-
-* Update the packages list and update the system:
-
-```bash
-sudo apt-get update && sudo apt-get upgrade -y
-```
-
-* Install SSH and NTP:
-
-```bash
-sudo apt-get install ssh ntp -y
-```
-
-* Enable and start the SSH and NTP services:
-
-```bash
-sudo systemctl enable ntp
-sudo systemctl start ntp
-sudo systemctl enable ssh
-sudo systemctl start ssh
-```
-
-* Configure `/etc/hosts` file. Example for controller-0 (need to replace `PUBLIC_GW_IP` and adapt this sample config for each VM):
-
-```bash
-127.0.0.1 localhost
-127.0.1.1 controller-0
-
-# The following lines are desirable for IPv6 capable hosts
-::1     ip6-localhost ip6-loopback
-fe00::0 ip6-localnet
-ff00::0 ip6-mcastprefix
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
-
-PUBLIC_GW_IP    gateway-01.external
-192.168.8.1     gateway-01
-
-192.168.8.11    controller-1
-192.168.8.12    controller-2
-
-192.168.8.20    worker-0
-192.168.8.21    worker-1
-192.168.8.22    worker-2
-```
-
-* To confirm the network configuration, reboot the VM and check the active IP address:
-
-```bash
-sudo reboot
-```
+---
 
 ## Running Commands in Parallel with tmux
 
-[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands on multiple compute instances at the same time. Labs in this tutorial may require running the same commands across multiple compute instances, in those cases consider using tmux and splitting a window into multiple panes with synchronize-panes enabled to speed up the provisioning process.
+[tmux](https://github.com/tmux/tmux/wiki) can be used to run commands on multiple compute instances simultaneously. Many labs in this tutorial may require running the same commands across several nodes. To speed up the provisioning process, consider splitting a tmux window into multiple panes and enabling pane synchronization.
 
-> The use of tmux is optional and not required to complete this tutorial.
+> To enable synchronize-panes, press `ctrl+b` followed by `shift+:`, then type `set synchronize-panes on` at the prompt. To disable it, type `set synchronize-panes off`.
 
 ![tmux screenshot](images/tmux-screenshot.png)
 
-> Enable synchronize-panes by pressing `ctrl+b` followed by `shift+:`. Next type `set synchronize-panes on` at the prompt. To disable synchronization: `set synchronize-panes off`.
-
 Next: [Installing the Client Tools](02-client-tools.md)
+```
+
+---
+
+This adapted guide should align with your topology:
+- **Public side:** Gateway VM uses 10.10.12.245 with upstream gateway 10.10.12.1.
+- **Private side:** All Kubernetes nodes and the gateway’s private interface operate on 192.168.1.0/24, with the gateway at 192.168.1.245.
+
+Feel free to adjust any details further as needed.
