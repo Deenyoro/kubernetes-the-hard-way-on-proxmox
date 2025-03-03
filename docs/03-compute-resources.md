@@ -26,7 +26,7 @@ Adjust the assignments according to your actual node count.
 
 ### Firewall Rules
 
-Within the Kubernetes private network (linked via your Proxmox bridge, e.g. `vmbr8`), all traffic is permitted. On the **gateway-245** VM, the firewall is configured to NAT traffic and allow the following inbound protocols from external networks:  
+Within the Kubernetes private network (linked via your Proxmox bridge, e.g. `vmbr2`), all traffic is permitted. On the **gateway-245** VM, the firewall is configured to NAT traffic and allow the following inbound protocols from external networks:  
 - ICMP  
 - TCP/22 (SSH)  
 - TCP/80 (HTTP)  
