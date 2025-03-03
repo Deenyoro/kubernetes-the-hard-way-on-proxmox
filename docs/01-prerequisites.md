@@ -48,16 +48,16 @@ On the Proxmox hypervisor, you might choose to add a `k8s-` prefix to the VM nam
 For this tutorial, you need 2 networks on your Proxmox hypervisor:
 
 - A public network bridge (e.g., `vmbr0`).
-- A private Kubernetes network bridge (e.g., `vmbr8`).
+- A private Kubernetes network bridge (e.g., `vmbr1`).
 
 > Note: The pod networks will be defined later.
 
-All Kubernetes nodes (workers and controllers) require only one network interface linked to the private Kubernetes network (`vmbr8`).
+All Kubernetes nodes (workers and controllers) require only one network interface linked to the private Kubernetes network (`vmbr1`).
 
 ![proxmox vm hardware](images/proxmox-vm-hardware.PNG)
 
 The reverse proxy / client tools / gateway VM needs 2 network interfaces:
-- One linked to the private Kubernetes network (`vmbr8`).
+- One linked to the private Kubernetes network (`vmbr1`).
 - One linked to the public network (`vmbr0`).
 
 ![proxmox vm hardware](images/proxmox-vm-hardware-gw.PNG)
