@@ -330,12 +330,3 @@ For each node, perform the following steps:
 ![tmux screenshot](images/tmux-screenshot.png)
 
 Next: [Installing the Client Tools](02-client-tools.md)
-```
-
----
-
-This adapted guide should align with your topology:
-- **Public side:** Gateway VM uses 10.10.12.245 with upstream gateway 10.10.12.1.
-- **Private side:** All Kubernetes nodes and the gateway’s private interface operate on 192.168.1.0/24, with the gateway at 192.168.1.245.
-
-Feel free to adjust any details further as needed.
