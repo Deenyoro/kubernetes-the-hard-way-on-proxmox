@@ -133,13 +133,3 @@ SSH is used to manage the controller and worker nodes.
    ```
 
 Next: [Provisioning a CA and Generating TLS Certificates](04-certificate-authority.md)
-
-
----
-
-This guide now reflects your topology:  
-- **gateway-245** has the public IP **10.10.12.245/24** (with an upstream gateway of **10.10.12.1**) and a private IP **192.168.1.245/24**.  
-- All Kubernetes nodes use the **192.168.1.0/24** network.  
-- The pod networks are planned in the **10.200.0.0/16** range.
-
-Feel free to adjust any subnets or hostnames further to fit your exact environment.
