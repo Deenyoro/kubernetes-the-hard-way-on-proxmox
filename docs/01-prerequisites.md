@@ -196,7 +196,7 @@ network:
 
     ```plaintext
     127.0.0.1       localhost
-    10.10.12.245    gateway-245.external gateway-245
+    10.10.12.1    gateway-245.external gateway-245
 
     # IPv6 (optional)
     ::1             localhost ip6-localhost ip6-loopback
@@ -238,13 +238,13 @@ For each node, perform the following steps:
 
 2. **Configure the network interface**
 
-   Edit `/etc/netplan/00-installer-config.yaml` (assuming `ens18` is the private interface). For example:
+   Edit `/etc/netplan/00-installer-config.yaml` (assuming `ens19` is the private interface). For example:
 
    ```yaml
    # This is the network config written by 'subiquity'
    network:
      ethernets:
-       ens18:
+       ens19:
          addresses:
          - 192.168.1.X/24
          gateway4: 192.168.1.245
@@ -300,7 +300,7 @@ For each node, perform the following steps:
    ff02::1         ip6-allnodes
    ff02::2         ip6-allrouters
 
-   10.10.12.245    gateway-245.external
+   10.10.12.1    gateway-245.external
    192.168.1.245   gateway-245
 
    192.168.1.212   controller-212
