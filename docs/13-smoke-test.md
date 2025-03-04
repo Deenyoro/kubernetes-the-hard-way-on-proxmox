@@ -137,6 +137,35 @@ Expected output:
 nginx version: nginx/1.19.0
 ```
 
+You can determine which worker a pod is running on and see deployment details across nodes with a few commands. Here are some useful commands:
+
+1. **To see which node a pod is running on:**  
+   Use the `-o wide` flag when listing pods. For example:  
+   ```bash
+   kubectl get pods -o wide
+   ```  
+   This displays an extra column (`NODE`) showing the node (worker) name where each pod is scheduled.
+
+2. **To see detailed information for a specific pod:**  
+   Use the `kubectl describe pod <pod-name>` command. For example:  
+   ```bash
+   kubectl describe pod nginx-7854ff8877-x5gwl
+   ```  
+   In the output, look for the `Node:` field. This tells you the node where the pod is running.
+
+3. **To list deployments and see their associated pods and nodes:**  
+   First, list deployments with:  
+   ```bash
+   kubectl get deployments
+   ```  
+   Then, for a given deployment, list its pods in wide format:  
+   ```bash
+   kubectl get pods -l app=<deployment-name> -o wide
+   ```  
+   Replace `<deployment-name>` with the appropriate label for your deployment (for example, `nginx` if that's the label applied by the nginx deployment).
+
+These commands let you determine on which worker each pod is running and help you see the distribution of your deployments across your cluster.
+
 ## Services
 
 Expose the nginx deployment via a NodePort service.
