@@ -11,13 +11,11 @@ Because pods on a node receive an IP from that node’s Pod CIDR, additional rou
 For example, on **worker-214** (which has Pod CIDR 10.200.0.0/24), add the following routes:
 
 ```bash
-ip route add 10.200.1.0/24 via 192.168.1.241  # Route to worker-241
-ip route add 10.200.2.0/24 via 192.168.1.242  # Route to worker-242
-ip route add 10.200.3.0/24 via 192.168.1.243  # Route to worker-243
-ip route add 10.200.4.0/24 via 192.168.1.244  # Route to worker-244
+ip route add 10.200.2.0/24 via 192.168.1.241  # Route to worker-241
+ip route add 10.200.3.0/24 via 192.168.1.242  # Route to worker-242
+ip route add 10.200.4.0/24 via 192.168.1.243  # Route to worker-243
+ip route add 10.200.5.0/24 via 192.168.1.244  # Route to worker-244
 ```
-
-On **worker-241**, you would add routes for 10.200.0.0/24, 10.200.2.0/24, 10.200.3.0/24, and 10.200.4.0/24—but **not** for 10.200.1.0/24.
 
 > **Note:** If you see messages such as `RTNETLINK answers: File exists`, it means the route already exists and can be safely ignored.
 
