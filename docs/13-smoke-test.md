@@ -1,7 +1,3 @@
-Below is the revised smoke test guide for your Pittsburgh, PA environment:
-
----
-
 # Smoke Test
 
 In this lab you will perform a series of tests to ensure your Kubernetes cluster is functioning correctly in your environment.
