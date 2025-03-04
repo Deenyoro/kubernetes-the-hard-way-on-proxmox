@@ -330,6 +330,3 @@ sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
 
 Next: [Configuring kubectl for Remote Access](10-configuring-kubectl.md)
 
----
-
-This revised guide has been updated for your Pittsburgh, PA environment with your actual worker node names and internal IP addressing as reflected in your netplan and hosts files.
