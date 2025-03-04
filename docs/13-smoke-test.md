@@ -29,6 +29,32 @@ Verify that secret data is encrypted at rest.
 
    The output should begin with a prefix like `k8s:enc:aescbc:v1:key1`, indicating that the data was encrypted using the `aescbc` provider with the key named `key1`.
 
+3. **Retrieve the decrypted secret using kubectl:**
+
+   Instead of querying etcd directly (which shows the encrypted blob), you can use `kubectl` to retrieve the secret. The Kubernetes API server automatically decrypts secret data before returning it. For example, running:
+
+   ```bash
+   kubectl get secret kubernetes-the-hard-way -o yaml
+   ```
+
+   might produce output like:
+
+   ```yaml
+   apiVersion: v1
+   data:
+     mykey: bXlkYXRh
+   kind: Secret
+   metadata:
+     creationTimestamp: "2025-03-04T18:54:07Z"
+     name: kubernetes-the-hard-way
+     namespace: default
+     resourceVersion: "91606"
+     uid: aa8edcc5-af67-40b5-9086-394087089b13
+   type: Opaque
+   ```
+
+   Here, the value of `mykey` is base64 encoded. To see the original text, you can decode it using a tool such as [Base64 Decode](https://www.base64decode.org/). For instance, pasting `bXlkYXRh` into that website will show you the decrypted value (which, in this example, is `mydata`).
+
 ## Deployments
 
 Verify that you can create and manage deployments.
