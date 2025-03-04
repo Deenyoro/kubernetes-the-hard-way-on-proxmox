@@ -75,11 +75,6 @@ network:
           - 8.8.8.8
           - 8.8.4.4
       routes:
-        # Default route
-        - to: 0.0.0.0/0
-          via: 192.168.1.245
-          metric: 100
-
         # Routes to other workers' Pod CIDRs (exclude own Pod CIDR: 10.200.1.0/24)
         - to: 10.200.2.0/24
           via: 192.168.1.241
@@ -113,11 +108,6 @@ network:
           - 8.8.8.8
           - 8.8.4.4
       routes:
-        # Default route
-        - to: 0.0.0.0/0
-          via: 192.168.1.245
-          metric: 100
-
         # Routes to other workers' Pod CIDRs (exclude own Pod CIDR: 10.200.2.0/24)
         - to: 10.200.1.0/24
           via: 192.168.1.214
@@ -151,11 +141,6 @@ network:
           - 8.8.8.8
           - 8.8.4.4
       routes:
-        # Default route
-        - to: 0.0.0.0/0
-          via: 192.168.1.245
-          metric: 100
-
         # Routes to other workers' Pod CIDRs (exclude own Pod CIDR: 10.200.3.0/24)
         - to: 10.200.1.0/24
           via: 192.168.1.214
@@ -189,11 +174,6 @@ network:
           - 8.8.8.8
           - 8.8.4.4
       routes:
-        # Default route
-        - to: 0.0.0.0/0
-          via: 192.168.1.245
-          metric: 100
-
         # Routes to other workers' Pod CIDRs (exclude own Pod CIDR: 10.200.4.0/24)
         - to: 10.200.1.0/24
           via: 192.168.1.214
@@ -227,11 +207,6 @@ network:
           - 8.8.8.8
           - 8.8.4.4
       routes:
-        # Default route
-        - to: 0.0.0.0/0
-          via: 192.168.1.245
-          metric: 100
-
         # Routes to other workers' Pod CIDRs (exclude own Pod CIDR: 10.200.5.0/24)
         - to: 10.200.1.0/24
           via: 192.168.1.214
