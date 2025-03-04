@@ -266,5 +266,3 @@ Check the routes again (`ip route`) to ensure they are added.
 ## Next Steps
 
 With routes in place, pods on different nodes should be able to communicate. Continue by [Deploying the DNS Cluster Add-on](12-dns-addon.md) to enable service name resolution within your cluster.
-
-```
