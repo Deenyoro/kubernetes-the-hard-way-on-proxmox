@@ -1,6 +1,3 @@
-```markdown
-# Provisioning Pod Network Routes in Pittsburgh, PA
-
 In this guide, we will configure static routes on each Kubernetes worker node so that pods on different nodes can communicate. When each worker node has its own Pod CIDR, you must tell every other worker node how to reach that CIDR. Below is an example setup:
 
 - **worker-214**:  
