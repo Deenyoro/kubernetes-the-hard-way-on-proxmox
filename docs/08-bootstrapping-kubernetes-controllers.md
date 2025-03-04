@@ -250,13 +250,142 @@ content-length: 2
 
 ok
 ```
+---
+
+> **Remember to run the above commands on each controller node: `controller-211`, `controller-212`, and `controller-213`.**
 
 ## RBAC for Kubelet Authorization
 
-(Instructions for configuring RBAC for kubelet authorization follow here, which affect the entire cluster and are run once from one controller.)
+In this section you will configure RBAC permissions to allow the Kubernetes API Server to access the Kubelet API on each worker node. Access to the Kubelet API is required for retrieving metrics, logs, and executing commands in pods.
+
+> This tutorial sets the Kubelet `--authorization-mode` flag to `Webhook`. Webhook mode uses the [SubjectAccessReview](https://kubernetes.io/docs/admin/authorization/#checking-api-access) API to determine authorization.
+
+The commands in this section affect the entire cluster and need to be run only once from one of the controller nodes. For example, log in to **controller-211**:
+
+```bash
+ssh root@controller-211
+```
+
+Create the `system:kube-apiserver-to-kubelet` [ClusterRole](https://kubernetes.io/docs/admin/authorization/rbac/#role-and-clusterrole) with permissions to access the Kubelet API and perform common pod-management tasks:
+
+```bash
+cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: system:kube-apiserver-to-kubelet
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/proxy
+      - nodes/stats
+      - nodes/log
+      - nodes/spec
+      - nodes/metrics
+    verbs:
+      - "*"
+EOF
+```
+
+The Kubernetes API Server authenticates to the Kubelet as the `kubernetes` user using the client certificate specified by the `--kubelet-client-certificate` flag.
+
+Bind the `system:kube-apiserver-to-kubelet` ClusterRole to the `kubernetes` user:
+
+```bash
+cat <<EOF | kubectl apply --kubeconfig admin.kubeconfig -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:kube-apiserver
+  namespace: ""
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:kube-apiserver-to-kubelet
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: kubernetes
+EOF
+```
 
 ## The Kubernetes Frontend Load Balancer
 
-(Instructions to provision an Nginx load balancer to front the API Servers on the gateway VM follow here.)
+In this section you will provision an Nginx load balancer to front the Kubernetes API Servers. The load balancer will listen on both the private and public IP addresses of the gateway VM (**gateway-245**).
+
+### Provision an Nginx Load Balancer
+
+First, update the package list and install Nginx along with the stream module:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx libnginx-mod-stream 
+```
+
+As the **root** user, append the following configuration to `/etc/nginx/nginx.conf` to create a stream that load-balances traffic to your controllers. In your environment, update the server lines to point to your controller nodes’ internal IPs:
+
+```bash
+cat <<EOF >> /etc/nginx/nginx.conf
+stream {
+    upstream controller_backend {
+        server 192.168.1.211:6443;
+        server 192.168.1.212:6443;
+        server 192.168.1.213:6443;
+    }
+    server {
+        listen     6443;
+        proxy_pass controller_backend;
+        # health_check; # Only available in Nginx commercial editions
+    }
+}
+EOF
+```
+
+Restart the Nginx service:
+
+```bash
+sudo systemctl restart nginx
+```
+
+Enable Nginx to start on boot:
+
+```bash
+sudo systemctl enable nginx
+```
+
+### Load Balancer Verification
+
+Define the static public IP address by setting the variable (replace `10.10.12.245` with your gateway’s public IP):
+
+```bash
+KUBERNETES_PUBLIC_ADDRESS=10.10.12.245
+```
+
+Make an HTTPS request to retrieve the Kubernetes version info from the load balancer:
+
+```bash
+curl --cacert ca.pem https://${KUBERNETES_PUBLIC_ADDRESS}:6443/version
+```
+
+Expected output should be similar to:
+
+```json
+{
+  "major": "1",
+  "minor": "29",
+  "gitVersion": "v1.29.1",
+  "gitCommit": "bc401b91f2782410b3fb3f9acf43a995c4de90d2",
+  "gitTreeState": "clean",
+  "buildDate": "2024-01-17T15:41:12Z",
+  "goVersion": "go1.21.6",
+  "compiler": "gc",
+  "platform": "linux/amd64"
+}
+```
 
 Next: [Bootstrapping the Kubernetes Worker Nodes](09-bootstrapping-kubernetes-workers.md)
