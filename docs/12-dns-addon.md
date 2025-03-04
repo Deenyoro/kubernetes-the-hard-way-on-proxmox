@@ -84,6 +84,38 @@ Address 1: 10.32.0.1 kubernetes.default.svc.cluster.local
 
 This confirms that CoreDNS is correctly resolving internal service names.
 
+Let's break down the command:
+
+```bash
+kubectl exec -ti $POD_NAME -- nslookup kubernetes
+```
+
+- **`kubectl`**  
+  The Kubernetes command-line tool that allows you to run commands against Kubernetes clusters.
+
+- **`exec`**  
+  This subcommand is used to execute a command in a container running in a pod.
+
+- **`-t`**  
+  Allocates a TTY (a pseudo-terminal) so that the command can run interactively. This is useful when you need formatted output or interactive behavior.
+
+- **`-i`**  
+  Keeps STDIN open even if not attached. This is useful when you need to interact with the process or when the command might require input.
+
+- **`$POD_NAME`**  
+  An environment variable that holds the name of the pod in which you want to run the command. This ensures you target the correct pod.
+
+- **`--`**  
+  Indicates the end of the command options for `kubectl exec`. Anything that follows is treated as the command to execute inside the container.
+
+- **`nslookup`**  
+  The command that will be executed inside the container. `nslookup` is a network utility used for querying the Domain Name System (DNS) to obtain domain name or IP address mapping information.
+
+- **`kubernetes`**  
+  The argument passed to `nslookup`. In this context, it tells `nslookup` to look up the DNS record for the hostname `kubernetes` (which, in Kubernetes clusters, is typically associated with the Kubernetes API server service).
+
+This command, when run, will execute `nslookup kubernetes` inside the specified pod, allowing you to verify DNS resolution for the `kubernetes` service within the cluster.
+
 Next: [Smoke Test](13-smoke-test.md)
 
 ---
