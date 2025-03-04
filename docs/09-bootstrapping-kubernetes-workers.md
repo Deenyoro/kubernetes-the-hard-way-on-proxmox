@@ -1,24 +1,3 @@
-Below is the revised guide for bootstrapping your Kubernetes worker nodes in your Pittsburgh, PA environment. In your setup, the worker nodes are named as follows:
-
-- **worker-214** with IP: 192.168.1.214  
-- **worker-241** with IP: 192.168.1.241  
-- **worker-242** with IP: 192.168.1.242  
-- **worker-243** with IP: 192.168.1.243  
-- **worker-244** with IP: 192.168.1.244
-
-Each worker node will run the following components: [runc](https://github.com/opencontainers/runc), [container networking plugins](https://github.com/containernetworking/cni), [containerd](https://github.com/containerd/containerd), [kubelet](https://kubernetes.io/docs/admin/kubelet), and [kube-proxy](https://kubernetes.io/docs/concepts/cluster-administration/proxies).
-
-The instructions below assume you’ll set a unique Pod CIDR for each worker. For example, you might assign:
-- **worker-214**: 10.200.0.0/24  
-- **worker-241**: 10.200.1.0/24  
-- **worker-242**: 10.200.2.0/24  
-- **worker-243**: 10.200.3.0/24  
-- **worker-244**: 10.200.4.0/24
-
-Follow these steps on each worker node (log in via SSH, e.g., `ssh root@worker-214`):
-
----
-
 # Bootstrapping the Kubernetes Worker Nodes
 
 In this lab you will bootstrap the Kubernetes worker nodes. Each worker node in our Pittsburgh, PA environment will run runc, container networking plugins, containerd, kubelet, and kube-proxy.
